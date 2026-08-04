@@ -70,8 +70,11 @@ if DATABASE_URL:
         return action
 
 else:
-    # SQLite for local development
-    DB_PATH = os.path.join(os.path.dirname(__file__), 'availability.db')
+    # SQLite for local development or Fly.io with persistent volume
+    DB_PATH = os.environ.get('DB_PATH', os.path.join(os.path.dirname(__file__), 'availability.db'))
+    # On Fly.io, use /data for persistence
+    if os.path.isdir('/data'):
+        DB_PATH = '/data/availability.db'
 
     def get_db():
         conn = sqlite3.connect(DB_PATH)
