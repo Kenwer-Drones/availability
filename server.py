@@ -2,6 +2,9 @@ from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO, emit
 import os
 import sqlite3
+import threading
+import time as time_module
+from datetime import datetime, timezone, timedelta
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'availability-secret')
@@ -211,6 +214,32 @@ def handle_connect():
 @socketio.on('disconnect')
 def handle_disconnect():
     pass
+
+
+# ===== Daily Email Scheduler =====
+def run_daily_email():
+    """Run daily_email.py at midnight Phoenix time (7:00 AM UTC)."""
+    while True:
+        now = datetime.now(timezone.utc)
+        # Calculate next 7:00 AM UTC (midnight Phoenix)
+        target = now.replace(hour=7, minute=0, second=0, microsecond=0)
+        if now >= target:
+            target += timedelta(days=1)
+        wait_seconds = (target - now).total_seconds()
+        time_module.sleep(wait_seconds)
+        # Run the email script
+        try:
+            from daily_email import get_todays_summary, send_email
+            today, rows = get_todays_summary()
+            send_email(today, rows)
+        except Exception as e:
+            print(f'Daily email error: {e}')
+
+
+# Start scheduler thread if SMTP is configured
+if os.environ.get('SMTP_USER'):
+    email_thread = threading.Thread(target=run_daily_email, daemon=True)
+    email_thread.start()
 
 
 if __name__ == '__main__':
