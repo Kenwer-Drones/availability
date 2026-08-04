@@ -1,0 +1,1384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Team Availability</title>
+    <link rel="icon" type="image/png" href="/static/icon.png">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        header {
+            background: #fff;
+            border-bottom: 1px solid #ddd;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-shrink: 0;
+            flex-wrap: wrap;
+        }
+
+        header h1 {
+            font-size: 18px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #333;
+        }
+
+        header h1 svg {
+            flex-shrink: 0;
+        }
+
+        .user-setup {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-left: auto;
+        }
+
+        .user-setup label {
+            font-size: 13px;
+            color: #666;
+        }
+
+        .user-setup input {
+            width: 60px;
+            padding: 4px 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 13px;
+            text-transform: uppercase;
+        }
+
+        .user-setup input:disabled {
+            background: #e8f5e9;
+            border-color: #4caf50;
+            color: #333;
+            font-weight: 600;
+        }
+
+        .user-setup select {
+            padding: 4px 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        .user-setup select option.tz-active {
+            background: #e8f0fe;
+            font-weight: 600;
+        }
+
+        .btn-lock {
+            padding: 4px 10px;
+            border: 1px solid #4caf50;
+            background: #4caf50;
+            color: #fff;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .btn-lock:hover {
+            background: #43a047;
+        }
+
+        .btn-reset {
+            display: none;
+        }
+
+        .main-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .dates-panel {
+            width: 140px;
+            background: #fff;
+            border-right: 1px solid #ddd;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        .date-item {
+            padding: 14px 14px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.15s;
+        }
+
+        .date-item:hover {
+            background: #f0f0f0;
+        }
+
+        .date-item.active {
+            background: #e8f0fe;
+            font-weight: 600;
+            border-left: 3px solid #4285f4;
+        }
+
+        .date-item .day-name {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 3px;
+        }
+
+        .date-item .day-number {
+            font-size: 17px;
+        }
+
+        .date-item.past {
+            background: #fff3e0;
+        }
+
+        .date-item.past.active {
+            background: #ffe0b2;
+            border-left-color: #ff9800;
+        }
+
+        .date-item.today {
+            background: #e8f5e9;
+        }
+
+        .date-item.today.active {
+            background: #c8e6c9;
+            border-left-color: #4caf50;
+        }
+
+        .date-item.future {
+            background: #e3f2fd;
+        }
+
+        .date-item.future.active {
+            background: #bbdefb;
+            border-left-color: #2196f3;
+        }
+
+        .schedule-panel {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px 20px;
+        }
+
+        .schedule-header {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 4px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .btn-apply-week {
+            font-size: 11px;
+            font-weight: 500;
+            padding: 4px 10px;
+            border: 1px solid #4285f4;
+            background: #fff;
+            color: #4285f4;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .btn-apply-week:hover {
+            background: #e8f0fe;
+        }
+
+        .btn-apply-week:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-undo-week {
+            font-size: 11px;
+            font-weight: 500;
+            padding: 4px 10px;
+            border: 1px solid #f44336;
+            background: #fff;
+            color: #f44336;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s;
+            display: none;
+        }
+
+        .btn-undo-week:hover {
+            background: #ffebee;
+        }
+
+        .btn-undo-week:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-clear-day {
+            font-size: 11px;
+            font-weight: 500;
+            padding: 4px 10px;
+            border: 1px solid #ff9800;
+            background: #fff;
+            color: #ff9800;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .btn-clear-day:hover {
+            background: #fff3e0;
+        }
+
+        .btn-clear-day:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .schedule-tz-note {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 16px;
+        }
+
+        .hours-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .hour-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 130px;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: #fff;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .hour-btn:hover {
+            border-color: #4285f4;
+            box-shadow: 0 2px 6px rgba(66, 133, 244, 0.15);
+        }
+
+        .hour-btn.selected {
+            background: #e8f5e9;
+            border-color: #4caf50;
+        }
+
+        .hour-btn.past-hour {
+            background: #fff3e0;
+            border-color: #ffe0b2;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+
+        .hour-btn.past-hour:hover {
+            border-color: #ffe0b2;
+            box-shadow: none;
+        }
+
+        .hour-btn .hour-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 6px;
+        }
+
+        .hour-btn .badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 3px;
+            justify-content: center;
+        }
+
+        .initials-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            background: #4285f4;
+            color: #fff;
+            font-size: 10px;
+            font-weight: 600;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .initials-badge.self {
+            background: #4caf50;
+        }
+
+        /* Tooltip */
+        .initials-badge .badge-tooltip {
+            display: none;
+            position: absolute;
+            bottom: calc(100% + 6px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: #fff;
+            font-size: 11px;
+            font-weight: 400;
+            white-space: nowrap;
+            padding: 4px 8px;
+            border-radius: 4px;
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        .initials-badge .badge-tooltip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 4px solid transparent;
+            border-top-color: #333;
+        }
+
+        .initials-badge:hover .badge-tooltip,
+        .initials-badge.show-tooltip .badge-tooltip {
+            display: block;
+        }
+
+        .hour-btn .empty-hint {
+            color: #bbb;
+            font-size: 11px;
+        }
+
+        .summary-section {
+            margin-top: 24px;
+            border-top: 1px solid #ddd;
+            padding-top: 16px;
+        }
+
+        .summary-title {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #333;
+        }
+
+        .summary-person {
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            background: #fff;
+            border: 1px solid #eee;
+            border-radius: 6px;
+        }
+
+        .summary-person-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: #4285f4;
+            margin-bottom: 4px;
+        }
+
+        .summary-person-hours {
+            font-size: 12px;
+            color: #555;
+            line-height: 1.5;
+            font-weight: 600;
+        }
+
+        .status-bar {
+            background: #fff;
+            border-top: 1px solid #ddd;
+            padding: 6px 20px;
+            font-size: 11px;
+            color: #888;
+            flex-shrink: 0;
+        }
+
+        .status-bar .connected {
+            color: #4caf50;
+        }
+
+        .status-bar .disconnected {
+            color: #f44336;
+        }
+
+        .setup-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+
+        .setup-box {
+            background: #fff;
+            border-radius: 10px;
+            padding: 30px;
+            min-width: 320px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        }
+
+        .setup-box h2 {
+            font-size: 18px;
+            margin-bottom: 16px;
+        }
+
+        .setup-box label {
+            display: block;
+            font-size: 13px;
+            color: #555;
+            margin-bottom: 4px;
+            margin-top: 12px;
+        }
+
+        .setup-box input, .setup-box select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .setup-box input {
+            text-transform: uppercase;
+        }
+
+        .setup-box button {
+            margin-top: 20px;
+            width: 100%;
+            padding: 10px;
+            background: #4285f4;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .setup-box button:hover {
+            background: #3367d6;
+        }
+
+        .setup-box .error {
+            color: #f44336;
+            font-size: 12px;
+            margin-top: 6px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1><img src="/static/icon.png" alt="logo" style="width:26px; height:26px; filter: invert(1);">Team Availability</h1>
+        <div class="user-setup">
+            <span id="user-display" style="font-size:13px; color:#333;"></span>
+            <label for="tz-select">Timezone:</label>
+            <select id="tz-select"></select>
+            <button class="btn-reset" id="btn-reset-user" style="display:none;"></button>
+        </div>
+    </header>
+
+    <div class="main-container">
+        <div class="dates-panel" id="dates-panel"></div>
+        <div class="schedule-panel" id="schedule-panel">
+            <p style="color:#aaa; font-size:13px;">Select a date to view/edit availability</p>
+        </div>
+    </div>
+
+    <div class="status-bar">
+        <span id="connection-status" class="disconnected">Connecting...</span>
+    </div>
+
+    <!-- Setup overlay for first-time users -->
+    <div class="setup-overlay" id="setup-overlay" style="display:none;">
+        <div class="setup-box">
+            <h2>Welcome! Set up your profile</h2>
+            <label for="setup-name">Your Name</label>
+            <input type="text" id="setup-name" maxlength="30" placeholder="John Doe" style="text-transform:none;">
+            <label for="setup-initials">Your Initials (2-3 letters)</label>
+            <input type="text" id="setup-initials" maxlength="3" placeholder="JD">
+            <label for="setup-tz">Your Timezone</label>
+            <select id="setup-tz"></select>
+            <div class="error" id="setup-error"></div>
+            <button id="setup-confirm">Confirm</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+    <script>
+        const socket = io();
+        let currentDate = null;
+        let slotsCache = {}; // keys are "YYYY-MM-DD_H" in UTC
+
+        // ===== IANA Timezone List =====
+        // ===== Timezone List — One per country/unified zone, sorted by UTC offset =====
+        const TIMEZONES = [
+            { value: 'Pacific/Midway', label: '(UTC-11:00) Samoa' },
+            { value: 'Pacific/Honolulu', label: '(UTC-10:00) Hawaii' },
+            { value: 'Pacific/Marquesas', label: '(UTC-09:30) Marquesas Islands' },
+            { value: 'America/Anchorage', label: '(UTC-09:00) Alaska' },
+            { value: 'America/Los_Angeles', label: '(UTC-08:00) US/Canada Pacific' },
+            { value: 'America/Phoenix', label: '(UTC-07:00) US/Phoenix (no DST)' },
+            { value: 'America/Denver', label: '(UTC-07:00) US/Canada Mountain' },
+            { value: 'America/Chicago', label: '(UTC-06:00) US/Canada Central' },
+            { value: 'America/Mexico_City', label: '(UTC-06:00) Mexico' },
+            { value: 'America/New_York', label: '(UTC-05:00) US/Canada Eastern' },
+            { value: 'America/Bogota', label: '(UTC-05:00) Colombia' },
+            { value: 'America/Lima', label: '(UTC-05:00) Peru' },
+            { value: 'America/Caracas', label: '(UTC-04:00) Venezuela' },
+            { value: 'America/Halifax', label: '(UTC-04:00) Canada Atlantic' },
+            { value: 'America/Santiago', label: '(UTC-04:00) Chile' },
+            { value: 'America/La_Paz', label: '(UTC-04:00) Bolivia' },
+            { value: 'America/St_Johns', label: '(UTC-03:30) Newfoundland' },
+            { value: 'America/Sao_Paulo', label: '(UTC-03:00) Brazil' },
+            { value: 'America/Argentina/Buenos_Aires', label: '(UTC-03:00) Argentina' },
+            { value: 'Atlantic/South_Georgia', label: '(UTC-02:00) South Georgia' },
+            { value: 'Atlantic/Azores', label: '(UTC-01:00) Azores' },
+            { value: 'Atlantic/Cape_Verde', label: '(UTC-01:00) Cape Verde' },
+            { value: 'UTC', label: '(UTC+00:00) UTC / GMT' },
+            { value: 'Europe/London', label: '(UTC+00:00) United Kingdom' },
+            { value: 'Africa/Accra', label: '(UTC+00:00) Ghana' },
+            { value: 'Africa/Lagos', label: '(UTC+01:00) Nigeria' },
+            { value: 'Europe/Paris', label: '(UTC+01:00) France' },
+            { value: 'Europe/Berlin', label: '(UTC+01:00) Germany' },
+            { value: 'Europe/Madrid', label: '(UTC+01:00) Spain' },
+            { value: 'Europe/Rome', label: '(UTC+01:00) Italy' },
+            { value: 'Europe/Amsterdam', label: '(UTC+01:00) Netherlands' },
+            { value: 'Europe/Warsaw', label: '(UTC+01:00) Poland' },
+            { value: 'Africa/Cairo', label: '(UTC+02:00) Egypt' },
+            { value: 'Africa/Johannesburg', label: '(UTC+02:00) South Africa' },
+            { value: 'Europe/Athens', label: '(UTC+02:00) Greece' },
+            { value: 'Europe/Bucharest', label: '(UTC+02:00) Romania' },
+            { value: 'Asia/Jerusalem', label: '(UTC+02:00) Israel' },
+            { value: 'Europe/Istanbul', label: '(UTC+03:00) Turkey' },
+            { value: 'Europe/Moscow', label: '(UTC+03:00) Russia (Moscow)' },
+            { value: 'Asia/Riyadh', label: '(UTC+03:00) Saudi Arabia' },
+            { value: 'Africa/Nairobi', label: '(UTC+03:00) Kenya / East Africa' },
+            { value: 'Asia/Baghdad', label: '(UTC+03:00) Iraq' },
+            { value: 'Asia/Tehran', label: '(UTC+03:30) Iran' },
+            { value: 'Asia/Dubai', label: '(UTC+04:00) UAE' },
+            { value: 'Asia/Muscat', label: '(UTC+04:00) Oman' },
+            { value: 'Asia/Baku', label: '(UTC+04:00) Azerbaijan' },
+            { value: 'Asia/Kabul', label: '(UTC+04:30) Afghanistan' },
+            { value: 'Asia/Karachi', label: '(UTC+05:00) Pakistan' },
+            { value: 'Asia/Tashkent', label: '(UTC+05:00) Uzbekistan' },
+            { value: 'Asia/Kolkata', label: '(UTC+05:30) India' },
+            { value: 'Asia/Colombo', label: '(UTC+05:30) Sri Lanka' },
+            { value: 'Asia/Kathmandu', label: '(UTC+05:45) Nepal' },
+            { value: 'Asia/Dhaka', label: '(UTC+06:00) Bangladesh' },
+            { value: 'Asia/Almaty', label: '(UTC+06:00) Kazakhstan' },
+            { value: 'Asia/Yangon', label: '(UTC+06:30) Myanmar' },
+            { value: 'Asia/Bangkok', label: '(UTC+07:00) Thailand' },
+            { value: 'Asia/Jakarta', label: '(UTC+07:00) Indonesia (West)' },
+            { value: 'Asia/Ho_Chi_Minh', label: '(UTC+07:00) Vietnam' },
+            { value: 'Asia/Shanghai', label: '(UTC+08:00) China' },
+            { value: 'Asia/Singapore', label: '(UTC+08:00) Singapore' },
+            { value: 'Asia/Kuala_Lumpur', label: '(UTC+08:00) Malaysia' },
+            { value: 'Asia/Manila', label: '(UTC+08:00) Philippines' },
+            { value: 'Asia/Taipei', label: '(UTC+08:00) Taiwan' },
+            { value: 'Australia/Perth', label: '(UTC+08:00) Australia (West)' },
+            { value: 'Asia/Tokyo', label: '(UTC+09:00) Japan' },
+            { value: 'Asia/Seoul', label: '(UTC+09:00) South Korea' },
+            { value: 'Australia/Darwin', label: '(UTC+09:30) Australia (Central)' },
+            { value: 'Australia/Sydney', label: '(UTC+10:00) Australia (East)' },
+            { value: 'Pacific/Guam', label: '(UTC+10:00) Guam' },
+            { value: 'Pacific/Noumea', label: '(UTC+11:00) New Caledonia' },
+            { value: 'Pacific/Auckland', label: '(UTC+12:00) New Zealand' },
+            { value: 'Pacific/Fiji', label: '(UTC+12:00) Fiji' },
+            { value: 'Pacific/Tongatapu', label: '(UTC+13:00) Tonga' }
+        ];
+
+        // ===== Timezone Utilities =====
+        function getUserTimezone() {
+            return localStorage.getItem('userTimezone') || 'America/Phoenix';
+        }
+
+        function setUserTimezone(tz) {
+            localStorage.setItem('userTimezone', tz);
+        }
+
+        // Convert a local date + hour (in user's timezone) to UTC date + hour
+        // Strategy: We construct the exact moment in UTC that corresponds to "localDateStr at localHour:00"
+        // in the user's timezone, by using binary search / Intl comparison.
+        function localToUTC(localDateStr, localHour) {
+            const tz = getUserTimezone();
+            // Estimate: create a UTC date and adjust
+            // First get approximate offset by checking a nearby UTC time
+            const approx = new Date(`${localDateStr}T${String(localHour).padStart(2,'0')}:00:00Z`);
+
+            // Get what hour this UTC time shows in the target timezone
+            const checkLocal = utcToLocal(localDateStr, localHour);
+
+            // Calculate the difference and adjust
+            // More reliable: iterate to find the UTC hour that maps to our desired local hour+date
+            // Try offsets from -14 to +14 hours
+            for (let offset = -14; offset <= 14; offset++) {
+                const candidateUTC = new Date(approx.getTime() + offset * 3600000);
+                const utcDateStr = candidateUTC.toISOString().slice(0, 10);
+                const utcHour = candidateUTC.getUTCHours();
+
+                // Check if this UTC time maps to our desired local time
+                const local = utcToLocal(utcDateStr, utcHour);
+                if (local.date_local === localDateStr && local.hour_local === localHour) {
+                    return { date_utc: utcDateStr, hour_utc: utcHour };
+                }
+            }
+
+            // Fallback (shouldn't reach here)
+            return { date_utc: localDateStr, hour_utc: localHour };
+        }
+
+        // Convert UTC date + hour to local date + hour (in user's timezone)
+        function utcToLocal(utcDateStr, utcHour) {
+            const tz = getUserTimezone();
+            const utcDt = new Date(`${utcDateStr}T${String(utcHour).padStart(2,'0')}:00:00Z`);
+
+            // Use Intl to get the local hour in the target timezone
+            const formatter = new Intl.DateTimeFormat('en-CA', {
+                timeZone: tz,
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: 'numeric',
+                hour12: false
+            });
+            const parts = formatter.formatToParts(utcDt);
+
+            let year, month, day, hour;
+            parts.forEach(p => {
+                if (p.type === 'year') year = p.value;
+                if (p.type === 'month') month = p.value;
+                if (p.type === 'day') day = p.value;
+                if (p.type === 'hour') hour = parseInt(p.value);
+            });
+            if (hour === 24) hour = 0;
+            return { date_local: `${year}-${month}-${day}`, hour_local: hour };
+        }
+
+        // Build a local-keyed cache from the UTC cache for a specific local date
+        // Returns { hour: [{initials, name}, ...] }
+        function getLocalSlotsForDate(localDateStr) {
+            const localSlots = {};
+            for (const [utcKey, people] of Object.entries(slotsCache)) {
+                const [utcDate, utcHourStr] = utcKey.split('_');
+                const utcHour = parseInt(utcHourStr);
+                const local = utcToLocal(utcDate, utcHour);
+                if (local.date_local === localDateStr) {
+                    const localKey = local.hour_local;
+                    if (!localSlots[localKey]) localSlots[localKey] = [];
+                    localSlots[localKey] = localSlots[localKey].concat(people);
+                }
+            }
+            return localSlots;
+        }
+
+        // ===== User Initials (locked after set) =====
+        function getInitials() {
+            return localStorage.getItem('userInitials') || '';
+        }
+
+        function getUserName() {
+            return localStorage.getItem('userName') || '';
+        }
+
+        function isInitialsLocked() {
+            return localStorage.getItem('initialsLocked') === 'true';
+        }
+
+        function lockInitials(initials, name) {
+            localStorage.setItem('userInitials', initials);
+            localStorage.setItem('userName', name);
+            localStorage.setItem('initialsLocked', 'true');
+        }
+
+        function resetUser() {
+            if (confirm('This will clear your profile. You will need to set up again. Continue?')) {
+                localStorage.removeItem('userInitials');
+                localStorage.removeItem('userName');
+                localStorage.removeItem('initialsLocked');
+                location.reload();
+            }
+        }
+
+        // ===== Setup Overlay =====
+        function populateTimezoneSelect(selectEl, selectedValue) {
+            selectEl.innerHTML = TIMEZONES.map(tz =>
+                `<option value="${tz.value}" ${tz.value === selectedValue ? 'selected' : ''}>${tz.label}</option>`
+            ).join('');
+        }
+
+        function showSetupIfNeeded() {
+            if (isInitialsLocked()) {
+                document.getElementById('setup-overlay').style.display = 'none';
+                document.getElementById('user-display').textContent = `Logged in as: ${getUserName()} (${getInitials()})`;
+                document.getElementById('btn-reset-user').style.display = 'inline-block';
+                return;
+            }
+            document.getElementById('setup-overlay').style.display = 'flex';
+            const setupTz = document.getElementById('setup-tz');
+            const detectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Phoenix';
+            populateTimezoneSelect(setupTz, detectedTz);
+        }
+
+        document.getElementById('setup-confirm').addEventListener('click', () => {
+            const name = document.getElementById('setup-name').value.trim();
+            const initials = document.getElementById('setup-initials').value.toUpperCase().replace(/[^A-Z]/g, '');
+            const tz = document.getElementById('setup-tz').value;
+            const errorEl = document.getElementById('setup-error');
+
+            if (!name) {
+                errorEl.textContent = 'Please enter your name.';
+                return;
+            }
+            if (initials.length < 2) {
+                errorEl.textContent = 'Please enter at least 2 letters for your initials.';
+                return;
+            }
+
+            lockInitials(initials, name);
+            setUserTimezone(tz);
+            document.getElementById('setup-overlay').style.display = 'none';
+            document.getElementById('user-display').textContent = `Logged in as: ${name} (${initials})`;
+            document.getElementById('btn-reset-user').style.display = 'inline-block';
+
+            const tzSelect = document.getElementById('tz-select');
+            tzSelect.value = tz;
+
+            // Register timezone with server
+            registerTimezone(initials, name, tz);
+
+            renderDatesPanel();
+        });
+
+        document.getElementById('btn-reset-user').addEventListener('click', resetUser);
+
+        // ===== Timezone Select in Header =====
+        const tzSelect = document.getElementById('tz-select');
+        populateTimezoneSelect(tzSelect, getUserTimezone());
+        tzSelect.addEventListener('change', () => {
+            setUserTimezone(tzSelect.value);
+            // Register updated timezone
+            if (isInitialsLocked()) {
+                registerTimezone(getInitials(), getUserName(), tzSelect.value);
+            }
+            // Re-render everything with new timezone
+            renderDatesPanel();
+            if (currentDate) {
+                renderSchedule(currentDate);
+            }
+        });
+
+        // ===== Date Generation =====
+        function formatDate(date) {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        function getLocalNow() {
+            const tz = getUserTimezone();
+            const now = new Date();
+            const parts = new Intl.DateTimeFormat('en-CA', {
+                timeZone: tz,
+                year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: 'numeric', hour12: false, minute: 'numeric'
+            }).formatToParts(now);
+
+            let year, month, day, hour, minute;
+            parts.forEach(p => {
+                if (p.type === 'year') year = p.value;
+                if (p.type === 'month') month = p.value;
+                if (p.type === 'day') day = p.value;
+                if (p.type === 'hour') hour = parseInt(p.value);
+                if (p.type === 'minute') minute = parseInt(p.value);
+            });
+            if (hour === 24) hour = 0;
+            return { date: `${year}-${month}-${day}`, hour, minute };
+        }
+
+        function getDayName(dateStr) {
+            const d = new Date(dateStr + 'T12:00:00');
+            return d.toLocaleDateString('en-US', { weekday: 'short' });
+        }
+
+        function getMonthDay(dateStr) {
+            const d = new Date(dateStr + 'T12:00:00');
+            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        }
+
+        function getDateClass(dateStr) {
+            const localNow = getLocalNow();
+            if (dateStr === localNow.date) return 'today';
+            if (dateStr < localNow.date) return 'past';
+            return 'future';
+        }
+
+        function generateDates() {
+            const dates = [];
+            const localNow = getLocalNow();
+            const base = new Date(localNow.date + 'T12:00:00');
+
+            for (let i = -7; i < 83; i++) {
+                const d = new Date(base);
+                d.setDate(d.getDate() + i);
+                dates.push(formatDate(d));
+            }
+            return dates;
+        }
+
+        // ===== Render Dates Panel =====
+        function renderDatesPanel() {
+            const panel = document.getElementById('dates-panel');
+            const dates = generateDates();
+
+            panel.innerHTML = dates.map(dateStr => {
+                const dateClass = getDateClass(dateStr);
+                const activeClass = currentDate === dateStr ? ' active' : '';
+                return `<div class="date-item ${dateClass}${activeClass}" data-date="${dateStr}">
+                    <div class="day-name">${getDayName(dateStr)}</div>
+                    <div class="day-number">${getMonthDay(dateStr)}</div>
+                </div>`;
+            }).join('');
+
+            panel.querySelectorAll('.date-item').forEach(el => {
+                el.addEventListener('click', () => selectDate(el.dataset.date));
+            });
+
+            if (!currentDate) {
+                selectDate(getLocalNow().date);
+            }
+        }
+
+        // ===== Select Date =====
+        function selectDate(dateStr) {
+            currentDate = dateStr;
+            document.querySelectorAll('.date-item').forEach(el => {
+                el.classList.toggle('active', el.dataset.date === dateStr);
+            });
+            fetchSlots(dateStr);
+        }
+
+        // ===== Fetch Slots =====
+        async function fetchSlots(dateStr) {
+            try {
+                const res = await fetch('/api/slots');
+                const data = await res.json();
+                slotsCache = data;
+                renderSchedule(dateStr);
+            } catch (err) {
+                console.error('Failed to fetch slots:', err);
+            }
+        }
+
+        // ===== Render Schedule =====
+        function isHourPast(localDateStr, localHour) {
+            const localNow = getLocalNow();
+            if (localDateStr < localNow.date) return true;
+            // Only mark as past if the hour has fully passed (current hour is still available)
+            if (localDateStr === localNow.date && localHour < localNow.hour) return true;
+            return false;
+        }
+
+        function renderSchedule(localDateStr) {
+            const panel = document.getElementById('schedule-panel');
+            const d = new Date(localDateStr + 'T12:00:00');
+            const headerText = d.toLocaleDateString('en-US', {
+                weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
+            });
+
+            const tz = getUserTimezone();
+
+            // Calculate minute offset from Phoenix for this timezone
+            // Phoenix is UTC-7 (no DST), so its offset is always -420 minutes
+            // We find user's timezone offset and get the difference in minutes
+            const refDate = new Date(`${localDateStr}T12:00:00Z`);
+            const phoenixStr = refDate.toLocaleString('en-US', { timeZone: 'America/Phoenix', hour: 'numeric', minute: 'numeric', hour12: false });
+            const userStr = refDate.toLocaleString('en-US', { timeZone: tz, hour: 'numeric', minute: 'numeric', hour12: false });
+            const phoenixMin = parseInt(phoenixStr.split(':')[1]) || 0;
+            const userMin = parseInt(userStr.split(':')[1]) || 0;
+            const startMinute = (userMin - phoenixMin + 60) % 60;
+
+            let html = `<div class="schedule-header"><span>${headerText}</span><button class="btn-apply-week" id="btn-apply-week">Apply to whole week</button><button class="btn-undo-week" id="btn-undo-week">Undo</button><button class="btn-clear-day" id="btn-clear-day">Clear day</button></div>`;
+            html += `<div class="schedule-tz-note">Times shown in: ${tz}${startMinute > 0 ? ' (slots start at :' + String(startMinute).padStart(2,'0') + ')' : ''}</div>`;
+            html += `<div class="hours-grid">`;
+
+            const localSlots = getLocalSlotsForDate(localDateStr);
+            const peopleSummary = {};
+            const userInitials = getInitials();
+            const minStr = String(startMinute).padStart(2, '0');
+
+            for (let h = 0; h < 24; h++) {
+                const hour12 = h === 0 ? 12 : (h > 12 ? h - 12 : h);
+                const ampm = h < 12 ? 'AM' : 'PM';
+                const label = `${hour12}:${minStr} ${ampm}`;
+                const people = localSlots[h] || []; // array of {initials, name}
+                const isSelected = people.some(p => p.initials === userInitials);
+                const pastHour = isHourPast(localDateStr, h);
+
+                people.forEach(p => {
+                    if (!peopleSummary[p.initials]) peopleSummary[p.initials] = { name: p.name, count: 0 };
+                    peopleSummary[p.initials].count++;
+                });
+
+                const badges = people.map(p => {
+                    const selfClass = p.initials === userInitials ? ' self' : '';
+                    const displayName = p.name || p.initials;
+                    return `<span class="initials-badge${selfClass}" data-name="${displayName}">${p.initials}<span class="badge-tooltip">${displayName}</span></span>`;
+                }).join('');
+
+                const classes = ['hour-btn'];
+                if (isSelected) classes.push('selected');
+                if (pastHour) classes.push('past-hour');
+
+                // Calculate end hour label
+                const endH = (h + 1) % 24;
+                const endHour12 = endH === 0 ? 12 : (endH > 12 ? endH - 12 : endH);
+                const endAmpm = endH < 12 ? 'AM' : 'PM';
+                const endLabel = `${endHour12}:${minStr} ${endAmpm}`;
+
+                html += `<div class="${classes.join(' ')}" data-hour="${h}" data-past="${pastHour}">
+                    <div class="hour-label">${label} – ${endLabel}</div>
+                    <div class="badges">
+                        ${badges || '<span class="empty-hint">—</span>'}
+                    </div>
+                </div>`;
+            }
+
+            html += `</div>`;
+
+            // Summary section
+            const peopleKeys = Object.keys(peopleSummary);
+            if (peopleKeys.length > 0) {
+                html += `<div class="summary-section">`;
+                html += `<div class="summary-title">Total Hours</div>`;
+                peopleKeys.sort().forEach(initials => {
+                    const info = peopleSummary[initials];
+                    html += `<div class="summary-person">
+                        <div class="summary-person-name">${initials} - <span style="color:#888; font-weight:400;">${info.name}</span></div>
+                        <div class="summary-person-hours">${info.count} hour${info.count !== 1 ? 's' : ''}</div>
+                    </div>`;
+                });
+                html += `</div>`;
+            }
+
+            panel.innerHTML = html;
+
+            // Click on badge to toggle tooltip on mobile
+            panel.querySelectorAll('.initials-badge').forEach(el => {
+                el.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    el.classList.toggle('show-tooltip');
+                    setTimeout(() => el.classList.remove('show-tooltip'), 2000);
+                });
+            });
+
+            // Add click handlers (only for non-past hours)
+            panel.querySelectorAll('.hour-btn').forEach(el => {
+                if (el.dataset.past === 'false') {
+                    el.addEventListener('click', () => toggleSlot(localDateStr, parseInt(el.dataset.hour)));
+                }
+            });
+
+            // Apply to whole week button
+            const applyBtn = document.getElementById('btn-apply-week');
+            if (applyBtn) {
+                applyBtn.addEventListener('click', () => applyToWholeWeek(localDateStr));
+            }
+            // Undo button
+            const undoBtn = document.getElementById('btn-undo-week');
+            if (undoBtn) {
+                undoBtn.style.display = lastWeekApply ? 'inline-block' : 'none';
+                undoBtn.addEventListener('click', () => undoWeekApply());
+            }
+            // Clear day button
+            const clearBtn = document.getElementById('btn-clear-day');
+            if (clearBtn) {
+                clearBtn.addEventListener('click', () => clearDay(localDateStr));
+            }
+        }
+
+        // ===== Apply to Whole Week =====
+        let lastWeekApply = null; // stores { slots: [{date_utc, hour_utc}], initials }
+
+        async function applyToWholeWeek(localDateStr) {
+            const initials = getInitials();
+            const name = getUserName();
+            if (!initials) {
+                alert('Please set up your profile first.');
+                return;
+            }
+
+            // Get the user's selected hours for this day
+            const localSlots = getLocalSlotsForDate(localDateStr);
+            const myHours = [];
+            for (let h = 0; h < 24; h++) {
+                const people = localSlots[h] || [];
+                if (people.some(p => p.initials === initials)) {
+                    myHours.push(h);
+                }
+            }
+
+            if (myHours.length === 0) {
+                alert('You have no hours selected on this day to apply.');
+                return;
+            }
+
+            // Get remaining days of the week — strictly future only (not today, not past)
+            const localNow = getLocalNow();
+            const baseDate = new Date(localDateStr + 'T12:00:00');
+            const daysToApply = [];
+
+            // Find the end of the week (next Sunday)
+            // Walk forward up to 6 days
+            for (let i = 1; i <= 6; i++) {
+                const nextDay = new Date(baseDate);
+                nextDay.setDate(nextDay.getDate() + i);
+                const nextDateStr = formatDate(nextDay);
+                // Only strictly future dates (after today)
+                if (nextDateStr <= localNow.date) continue;
+                daysToApply.push(nextDateStr);
+            }
+
+            if (daysToApply.length === 0) {
+                alert('No future days in the week to apply to.');
+                return;
+            }
+
+            const btn = document.getElementById('btn-apply-week');
+            btn.disabled = true;
+            btn.textContent = 'Applying...';
+
+            const appliedSlots = []; // track for undo
+
+            for (const dayStr of daysToApply) {
+                for (const hour of myHours) {
+                    const utc = localToUTC(dayStr, hour);
+                    const key = `${utc.date_utc}_${utc.hour_utc}`;
+
+                    // Check if already selected
+                    const existing = slotsCache[key] && slotsCache[key].some(p => p.initials === initials);
+                    if (existing) continue;
+
+                    try {
+                        const res = await fetch('/api/slots', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ date_utc: utc.date_utc, hour_utc: utc.hour_utc, initials, name })
+                        });
+                        const data = await res.json();
+                        if (data.action === 'added') {
+                            if (!slotsCache[key]) slotsCache[key] = [];
+                            slotsCache[key].push({ initials, name });
+                            appliedSlots.push({ date_utc: utc.date_utc, hour_utc: utc.hour_utc });
+                        }
+                    } catch (err) {
+                        console.error('Failed to apply slot:', err);
+                    }
+                }
+            }
+
+            // Store for undo
+            lastWeekApply = { slots: appliedSlots, initials };
+
+            btn.disabled = false;
+            btn.textContent = 'Apply to whole week';
+            if (currentDate) renderSchedule(currentDate);
+            alert(`Applied your schedule to ${daysToApply.length} day(s) ahead.`);
+        }
+
+        // ===== Undo Week Apply =====
+        async function undoWeekApply() {
+            if (!lastWeekApply || lastWeekApply.slots.length === 0) return;
+
+            const { slots, initials } = lastWeekApply;
+            const name = getUserName();
+
+            const undoBtn = document.getElementById('btn-undo-week');
+            if (undoBtn) {
+                undoBtn.disabled = true;
+                undoBtn.textContent = 'Undoing...';
+            }
+
+            for (const slot of slots) {
+                const key = `${slot.date_utc}_${slot.hour_utc}`;
+                try {
+                    const res = await fetch('/api/slots', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ date_utc: slot.date_utc, hour_utc: slot.hour_utc, initials, name })
+                    });
+                    const data = await res.json();
+                    if (data.action === 'removed') {
+                        if (slotsCache[key]) {
+                            slotsCache[key] = slotsCache[key].filter(p => p.initials !== initials);
+                            if (slotsCache[key].length === 0) delete slotsCache[key];
+                        }
+                    }
+                } catch (err) {
+                    console.error('Failed to undo slot:', err);
+                }
+            }
+
+            lastWeekApply = null;
+            if (undoBtn) {
+                undoBtn.disabled = false;
+                undoBtn.textContent = 'Undo';
+                undoBtn.style.display = 'none';
+            }
+            if (currentDate) renderSchedule(currentDate);
+            alert('Week schedule undone.');
+        }
+
+        // ===== Clear Day =====
+        async function clearDay(localDateStr) {
+            const initials = getInitials();
+            const name = getUserName();
+            if (!initials) {
+                alert('Please set up your profile first.');
+                return;
+            }
+
+            // Find all my slots for this local date
+            const localSlots = getLocalSlotsForDate(localDateStr);
+            const myHours = [];
+            for (let h = 0; h < 24; h++) {
+                const people = localSlots[h] || [];
+                if (people.some(p => p.initials === initials)) {
+                    myHours.push(h);
+                }
+            }
+
+            if (myHours.length === 0) {
+                alert('You have no hours to clear on this day.');
+                return;
+            }
+
+            if (!confirm(`Clear all your ${myHours.length} hour(s) for this day?`)) return;
+
+            const btn = document.getElementById('btn-clear-day');
+            btn.disabled = true;
+            btn.textContent = 'Clearing...';
+
+            for (const hour of myHours) {
+                const utc = localToUTC(localDateStr, hour);
+                const key = `${utc.date_utc}_${utc.hour_utc}`;
+
+                try {
+                    const res = await fetch('/api/slots', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ date_utc: utc.date_utc, hour_utc: utc.hour_utc, initials, name })
+                    });
+                    const data = await res.json();
+                    if (data.action === 'removed') {
+                        if (slotsCache[key]) {
+                            slotsCache[key] = slotsCache[key].filter(p => p.initials !== initials);
+                            if (slotsCache[key].length === 0) delete slotsCache[key];
+                        }
+                    }
+                } catch (err) {
+                    console.error('Failed to clear slot:', err);
+                }
+            }
+
+            btn.disabled = false;
+            btn.textContent = 'Clear day';
+            if (currentDate) renderSchedule(currentDate);
+        }
+
+        // ===== Toggle Slot =====
+        async function toggleSlot(localDate, localHour) {
+            const initials = getInitials();
+            const name = getUserName();
+            if (!initials) {
+                alert('Please set up your profile first.');
+                return;
+            }
+
+            const utc = localToUTC(localDate, localHour);
+
+            try {
+                const res = await fetch('/api/slots', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ date_utc: utc.date_utc, hour_utc: utc.hour_utc, initials, name })
+                });
+                const data = await res.json();
+
+                const key = `${utc.date_utc}_${utc.hour_utc}`;
+                if (data.action === 'added') {
+                    if (!slotsCache[key]) slotsCache[key] = [];
+                    slotsCache[key].push({ initials, name });
+                } else if (data.action === 'removed') {
+                    if (slotsCache[key]) {
+                        slotsCache[key] = slotsCache[key].filter(p => p.initials !== initials);
+                        if (slotsCache[key].length === 0) delete slotsCache[key];
+                    }
+                }
+
+                if (currentDate) {
+                    renderSchedule(currentDate);
+                }
+            } catch (err) {
+                console.error('Failed to toggle slot:', err);
+            }
+        }
+
+        // ===== Socket.IO Real-Time Sync =====
+        socket.on('connect', () => {
+            document.getElementById('connection-status').textContent = 'Connected (live sync)';
+            document.getElementById('connection-status').className = 'connected';
+        });
+
+        socket.on('disconnect', () => {
+            document.getElementById('connection-status').textContent = 'Disconnected';
+            document.getElementById('connection-status').className = 'disconnected';
+        });
+
+        socket.on('slot_update', (data) => {
+            if (data.initials === getInitials()) return;
+
+            const key = `${data.date_utc}_${data.hour_utc}`;
+
+            if (data.action === 'added') {
+                if (!slotsCache[key]) slotsCache[key] = [];
+                if (!slotsCache[key].some(p => p.initials === data.initials)) {
+                    slotsCache[key].push({ initials: data.initials, name: data.name });
+                }
+            } else if (data.action === 'removed') {
+                if (slotsCache[key]) {
+                    slotsCache[key] = slotsCache[key].filter(p => p.initials !== data.initials);
+                    if (slotsCache[key].length === 0) delete slotsCache[key];
+                }
+            }
+
+            if (currentDate) {
+                renderSchedule(currentDate);
+            }
+        });
+
+        // ===== User Timezone Tracking =====
+        let activeTimezones = {}; // { initials: { timezone, name } }
+
+        async function registerTimezone(initials, name, timezone) {
+            try {
+                await fetch('/api/timezones', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ initials, name, timezone })
+                });
+            } catch (err) {
+                console.error('Failed to register timezone:', err);
+            }
+        }
+
+        async function fetchTimezones() {
+            try {
+                const res = await fetch('/api/timezones');
+                activeTimezones = await res.json();
+                highlightTimezones();
+            } catch (err) {
+                console.error('Failed to fetch timezones:', err);
+            }
+        }
+
+        function highlightTimezones() {
+            // Count how many people per timezone
+            const tzCounts = {};
+            for (const [initials, info] of Object.entries(activeTimezones)) {
+                const tz = info.timezone;
+                if (!tzCounts[tz]) tzCounts[tz] = [];
+                tzCounts[tz].push(info.name || initials);
+            }
+
+            // Highlight options in the timezone dropdown
+            const tzSelect = document.getElementById('tz-select');
+            Array.from(tzSelect.options).forEach(opt => {
+                if (tzCounts[opt.value]) {
+                    opt.classList.add('tz-active');
+                } else {
+                    opt.classList.remove('tz-active');
+                }
+            });
+        }
+
+        // Listen for timezone updates from other users
+        socket.on('tz_update', (data) => {
+            activeTimezones = data;
+            highlightTimezones();
+        });
+
+        // Register on page load if already set up
+        if (isInitialsLocked()) {
+            registerTimezone(getInitials(), getUserName(), getUserTimezone());
+        }
+        fetchTimezones();
+
+        // ===== Infinite Scroll =====
+        const datesPanel = document.getElementById('dates-panel');
+        let daysLoaded = 90;
+        datesPanel.addEventListener('scroll', () => {
+            if (datesPanel.scrollTop + datesPanel.clientHeight >= datesPanel.scrollHeight - 50) {
+                loadMoreDates();
+            }
+        });
+
+        function loadMoreDates() {
+            const localNow = getLocalNow();
+            const base = new Date(localNow.date + 'T12:00:00');
+
+            const newDates = [];
+            for (let i = daysLoaded - 7; i < daysLoaded - 7 + 30; i++) {
+                const d = new Date(base);
+                d.setDate(d.getDate() + i);
+                newDates.push(formatDate(d));
+            }
+            daysLoaded += 30;
+
+            const panel = document.getElementById('dates-panel');
+            newDates.forEach(dateStr => {
+                const dateClass = getDateClass(dateStr);
+                const activeClass = currentDate === dateStr ? ' active' : '';
+                const div = document.createElement('div');
+                div.className = `date-item ${dateClass}${activeClass}`;
+                div.dataset.date = dateStr;
+                div.innerHTML = `<div class="day-name">${getDayName(dateStr)}</div>
+                    <div class="day-number">${getMonthDay(dateStr)}</div>`;
+                div.addEventListener('click', () => selectDate(dateStr));
+                panel.appendChild(div);
+            });
+        }
+
+        // ===== Init =====
+        showSetupIfNeeded();
+        renderDatesPanel();
+
+        setTimeout(() => {
+            const todayEl = document.querySelector('.date-item.today');
+            if (todayEl) todayEl.scrollIntoView({ block: 'center' });
+        }, 100);
+    </script>
+</body>
+</html>
