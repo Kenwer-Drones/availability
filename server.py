@@ -137,6 +137,11 @@ def index():
     return render_template('index.html')
 
 
+@app.route('/robots.txt')
+def robots():
+    return 'User-agent: *\nDisallow: /', 200, {'Content-Type': 'text/plain'}
+
+
 @app.route('/api/timezones', methods=['GET'])
 def get_timezones():
     """Get all registered user timezones."""
