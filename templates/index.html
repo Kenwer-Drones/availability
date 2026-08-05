@@ -534,15 +534,28 @@
             '#ff5722', '#673ab7', '#009688', '#ff9800', '#795548',
             '#607d8b', '#c2185b', '#00897b', '#7b1fa2', '#d84315'
         ];
-        const userColorMap = {};
-        let nextColorIndex = 0;
+        const userColorAssignments = {};
+        let usedColorIndices = new Set();
 
         function getColorForUser(initials) {
-            if (!userColorMap[initials]) {
-                userColorMap[initials] = USER_COLORS[nextColorIndex % USER_COLORS.length];
-                nextColorIndex++;
+            if (userColorAssignments[initials]) return userColorAssignments[initials];
+
+            // Hash to get a starting index
+            let hash = 0;
+            for (let i = 0; i < initials.length; i++) {
+                hash = ((hash << 5) - hash) + initials.charCodeAt(i);
+                hash = hash & hash;
             }
-            return userColorMap[initials];
+            let index = Math.abs(hash) % USER_COLORS.length;
+
+            // If taken, find next available
+            while (usedColorIndices.has(index)) {
+                index = (index + 1) % USER_COLORS.length;
+            }
+
+            usedColorIndices.add(index);
+            userColorAssignments[initials] = USER_COLORS[index];
+            return USER_COLORS[index];
         }
 
         // ===== IANA Timezone List =====
