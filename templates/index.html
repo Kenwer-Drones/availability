@@ -328,10 +328,6 @@
             cursor: pointer;
         }
 
-        .initials-badge.self {
-            background: #4caf50;
-        }
-
         /* Tooltip */
         .initials-badge .badge-tooltip {
             display: none;
@@ -530,6 +526,24 @@
         const socket = io();
         let currentDate = null;
         let slotsCache = {}; // keys are "YYYY-MM-DD_H" in UTC
+
+        // ===== Unique Color Per User =====
+        const USER_COLORS = [
+            '#e74c3c', '#2ecc71', '#9b59b6', '#f39c12', '#1abc9c',
+            '#e67e22', '#3498db', '#e91e63', '#00bcd4', '#8bc34a',
+            '#ff5722', '#673ab7', '#009688', '#ff9800', '#795548',
+            '#607d8b', '#c2185b', '#00897b', '#7b1fa2', '#d84315'
+        ];
+        const userColorMap = {};
+        let nextColorIndex = 0;
+
+        function getColorForUser(initials) {
+            if (!userColorMap[initials]) {
+                userColorMap[initials] = USER_COLORS[nextColorIndex % USER_COLORS.length];
+                nextColorIndex++;
+            }
+            return userColorMap[initials];
+        }
 
         // ===== IANA Timezone List =====
         // ===== Timezone List — One per country/unified zone, sorted by UTC offset =====
@@ -943,9 +957,9 @@
                 });
 
                 const badges = people.map(p => {
-                    const selfClass = p.initials === userInitials ? ' self' : '';
+                    const color = getColorForUser(p.initials);
                     const displayName = p.name || p.initials;
-                    return `<span class="initials-badge${selfClass}" data-name="${displayName}">${p.initials}<span class="badge-tooltip">${displayName}</span></span>`;
+                    return `<span class="initials-badge" style="background:${color}" data-name="${displayName}">${p.initials}<span class="badge-tooltip">${displayName}</span></span>`;
                 }).join('');
 
                 const classes = ['hour-btn'];
