@@ -529,33 +529,47 @@
 
         // ===== Unique Color Per User =====
         const USER_COLORS = [
-            '#e74c3c', '#2ecc71', '#9b59b6', '#f39c12', '#1abc9c',
-            '#e67e22', '#3498db', '#e91e63', '#00bcd4', '#8bc34a',
-            '#ff5722', '#673ab7', '#009688', '#ff9800', '#795548',
-            '#607d8b', '#c2185b', '#00897b', '#7b1fa2', '#d84315'
+            '#e74c3c', // red
+            '#3498db', // blue
+            '#f39c12', // orange
+            '#9b59b6', // purple
+            '#1abc9c', // teal
+            '#e91e63', // pink
+            '#00bcd4', // cyan
+            '#ff5722', // deep orange
+            '#673ab7', // deep purple
+            '#009688', // dark teal
+            '#795548', // brown
+            '#607d8b', // blue grey
+            '#c2185b', // dark pink
+            '#d84315', // burnt orange
+            '#7b1fa2', // violet
+            '#00897b', // green teal
+            '#f57c00', // amber
+            '#5c6bc0', // indigo
+            '#ef5350', // light red
+            '#26a69a'  // medium teal
         ];
         const userColorAssignments = {};
-        let usedColorIndices = new Set();
+        let colorIndex = 0;
 
         function getColorForUser(initials) {
             if (userColorAssignments[initials]) return userColorAssignments[initials];
+            userColorAssignments[initials] = USER_COLORS[colorIndex % USER_COLORS.length];
+            colorIndex++;
+            return userColorAssignments[initials];
+        }
 
-            // Hash to get a starting index
-            let hash = 0;
-            for (let i = 0; i < initials.length; i++) {
-                hash = ((hash << 5) - hash) + initials.charCodeAt(i);
-                hash = hash & hash;
+        // Pre-assign colors from all known users in slot data so order is consistent
+        function assignColorsFromCache() {
+            const allInitials = new Set();
+            for (const people of Object.values(slotsCache)) {
+                for (const p of people) {
+                    allInitials.add(p.initials);
+                }
             }
-            let index = Math.abs(hash) % USER_COLORS.length;
-
-            // If taken, find next available
-            while (usedColorIndices.has(index)) {
-                index = (index + 1) % USER_COLORS.length;
-            }
-
-            usedColorIndices.add(index);
-            userColorAssignments[initials] = USER_COLORS[index];
-            return USER_COLORS[index];
+            // Sort alphabetically so color assignment is deterministic
+            [...allInitials].sort().forEach(initials => getColorForUser(initials));
         }
 
         // ===== IANA Timezone List =====
@@ -913,6 +927,7 @@
                 const res = await fetch('/api/slots');
                 const data = await res.json();
                 slotsCache = data;
+                assignColorsFromCache();
                 renderSchedule(dateStr);
             } catch (err) {
                 console.error('Failed to fetch slots:', err);
