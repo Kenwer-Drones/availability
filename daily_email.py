@@ -17,12 +17,31 @@ SMTP_PASS = os.environ.get('SMTP_PASS', '')
 EMAIL_TO = os.environ.get('EMAIL_TO', 'time@kenwer.com')
 EMAIL_FROM = os.environ.get('EMAIL_FROM', SMTP_USER)
 
+DATABASE_URL = os.environ.get('DATABASE_URL')
+if DATABASE_URL and DATABASE_URL.startswith('postgres://'):
+    DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+
 DB_PATH = '/data/availability.db' if os.path.isdir('/data') else 'availability.db'
 
 
 def get_todays_summary():
     """Get hours per user for today (UTC date)."""
     today = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+
+    if DATABASE_URL:
+        import psycopg2
+        from psycopg2.extras import RealDictCursor
+        conn = psycopg2.connect(DATABASE_URL)
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute(
+            'SELECT initials, name, COUNT(*) as hours FROM slots WHERE date_utc = %s GROUP BY initials, name ORDER BY initials',
+            (today,)
+        )
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        return today, rows
+
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
