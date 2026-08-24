@@ -1,0 +1,40 @@
+        // ===== Socket.IO Events =====
+        socket.on('connect', () => {
+            console.log('✅ Socket connected');
+            document.getElementById('connection-status').textContent = 'Connected';
+            document.getElementById('connection-status').className = 'connected';
+        });
+
+        socket.on('disconnect', () => {
+            console.log('❌ Socket disconnected');
+            document.getElementById('connection-status').textContent = 'Disconnected';
+            document.getElementById('connection-status').className = 'disconnected';
+        });
+
+        socket.on('slot_update', (data) => {
+            console.log('📡 Slot update received:', data);
+            if (currentDate) {
+                fetchSlots(currentDate);
+            }
+        });
+
+        socket.on('tz_update', (timezones) => {
+            console.log('📡 Timezone update received:', timezones);
+        });
+
+        // ===== INITIALIZATION =====
+        // Show setup overlay if needed OR load the application
+        console.log('🚀 App startup - checking if user is locked in...');
+        showSetupIfNeeded();
+        // Always populate the timezone selector
+        populateTimezoneSelect(tzSelect, getUserTimezone());
+        // If user is locked in, render the dates panel and fetch slots
+        if (isInitialsLocked()) {
+            console.log('✅ User locked in, rendering dates panel...');
+            renderDatesPanel();
+        } else {
+            console.log('⚠️ User not locked in - waiting for setup to complete');
+        }
+    </script>
+</body>
+</html>
