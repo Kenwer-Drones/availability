@@ -150,6 +150,39 @@ def robots():
     return 'User-agent: *\nDisallow: /', 200, {'Content-Type': 'text/plain'}
 
 
+@app.route('/api/debug')
+def debug():
+    """Temporary diagnostic endpoint to surface DB connection errors."""
+    import traceback
+    info = {
+        'has_database_url': bool(DATABASE_URL),
+        'async_mode': async_mode,
+    }
+    try:
+        conn = get_db()
+        info['connect'] = 'ok'
+        try:
+            init_db()
+            info['init_db'] = 'ok'
+        except Exception as e:
+            info['init_db'] = f'FAILED: {e}'
+            info['init_db_trace'] = traceback.format_exc()
+        try:
+            rows = query_all_slots()
+            info['query'] = f'ok, {len(rows)} rows'
+        except Exception as e:
+            info['query'] = f'FAILED: {e}'
+            info['query_trace'] = traceback.format_exc()
+        try:
+            conn.close()
+        except Exception:
+            pass
+    except Exception as e:
+        info['connect'] = f'FAILED: {e}'
+        info['connect_trace'] = traceback.format_exc()
+    return jsonify(info)
+
+
 @app.route('/api/timezones', methods=['GET'])
 def get_timezones():
     """Get all registered user timezones."""
