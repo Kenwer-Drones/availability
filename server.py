@@ -21,7 +21,7 @@ if DATABASE_URL:
         DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
 
     def get_db():
-        conn = psycopg2.connect(DATABASE_URL)
+        conn = psycopg2.connect(DATABASE_URL, sslmode='require')
         return conn
 
     def init_db():
@@ -129,7 +129,12 @@ else:
 async_mode = 'gevent' if DATABASE_URL else 'threading'
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode=async_mode)
 
-init_db()
+try:
+    init_db()
+except Exception as _e:
+    import traceback
+    print("init_db() failed at startup, will retry lazily:", _e)
+    traceback.print_exc()
 
 # In-memory store for user timezones (persists via API)
 user_timezones = {}  # { initials: timezone }
@@ -172,7 +177,19 @@ def set_timezone():
 
 @app.route('/api/slots', methods=['GET'])
 def get_slots():
-    rows = query_all_slots()
+    try:
+        rows = query_all_slots()
+    except Exception as e:
+        # Table may not exist yet (e.g. fresh DB) — try to create it, then retry once
+        import traceback
+        traceback.print_exc()
+        try:
+            init_db()
+            rows = query_all_slots()
+        except Exception as e2:
+            traceback.print_exc()
+            return jsonify({'error': str(e2)}), 500
+
     slots = {}
     for row in rows:
         key = f"{row['date_utc']}_{row['hour_utc']}"
