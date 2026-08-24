@@ -328,7 +328,6 @@
             cursor: pointer;
         }
 
-        /* Tooltip */
         .initials-badge .badge-tooltip {
             display: none;
             position: absolute;
@@ -506,7 +505,6 @@
         <span id="connection-status" class="disconnected">Connecting...</span>
     </div>
 
-    <!-- Setup overlay for first-time users -->
     <div class="setup-overlay" id="setup-overlay" style="display:none;">
         <div class="setup-box">
             <h2>Welcome! Set up your profile</h2>
@@ -525,31 +523,9 @@
     <script>
         const socket = io();
         let currentDate = null;
-        let slotsCache = {}; // keys are "YYYY-MM-DD_H" in UTC
+        let slotsCache = {};
 
-        // ===== Unique Color Per User =====
-        const USER_COLORS = [
-            '#e74c3c', // red
-            '#3498db', // blue
-            '#f39c12', // orange
-            '#9b59b6', // purple
-            '#1abc9c', // teal
-            '#e91e63', // pink
-            '#00bcd4', // cyan
-            '#ff5722', // deep orange
-            '#673ab7', // deep purple
-            '#009688', // dark teal
-            '#795548', // brown
-            '#607d8b', // blue grey
-            '#c2185b', // dark pink
-            '#d84315', // burnt orange
-            '#7b1fa2', // violet
-            '#00897b', // green teal
-            '#f57c00', // amber
-            '#5c6bc0', // indigo
-            '#ef5350', // light red
-            '#26a69a'  // medium teal
-        ];
+        const USER_COLORS = ['#e74c3c', '#3498db', '#f39c12', '#9b59b6', '#1abc9c', '#e91e63', '#00bcd4', '#ff5722', '#673ab7', '#009688', '#795548', '#607d8b', '#c2185b', '#d84315', '#7b1fa2', '#00897b', '#f57c00', '#5c6bc0', '#ef5350', '#26a69a'];
         const userColorAssignments = {};
         let colorIndex = 0;
 
@@ -560,7 +536,6 @@
             return userColorAssignments[initials];
         }
 
-        // Pre-assign colors from all known users in slot data so order is consistent
         function assignColorsFromCache() {
             const allInitials = new Set();
             for (const people of Object.values(slotsCache)) {
@@ -568,11 +543,9 @@
                     allInitials.add(p.initials);
                 }
             }
-            // Sort alphabetically so color assignment is deterministic
             [...allInitials].sort().forEach(initials => getColorForUser(initials));
         }
 
-        // ===== IANA Timezone List =====
         const TIMEZONES = [
             { value: 'Pacific/Midway', label: '(UTC-11:00) Samoa' },
             { value: 'Pacific/Honolulu', label: '(UTC-10:00) Hawaii' },
@@ -649,20 +622,12 @@
             { value: 'Pacific/Tongatapu', label: '(UTC+13:00) Tonga' }
         ];
 
-        // ===== Timezone Utilities =====
-        function getUserTimezone() {
-            return localStorage.getItem('userTimezone') || 'America/Phoenix';
-        }
+        function getUserTimezone() { return localStorage.getItem('userTimezone') || 'America/Phoenix'; }
+        function setUserTimezone(tz) { localStorage.setItem('userTimezone', tz); }
 
-        function setUserTimezone(tz) {
-            localStorage.setItem('userTimezone', tz);
-        }
-
-        // Convert a local date + hour (in user's timezone) to UTC date + hour
         function localToUTC(localDateStr, localHour) {
             const tz = getUserTimezone();
             const approx = new Date(`${localDateStr}T${String(localHour).padStart(2,'0')}:00:00Z`);
-            const checkLocal = utcToLocal(localDateStr, localHour);
             for (let offset = -14; offset <= 14; offset++) {
                 const candidateUTC = new Date(approx.getTime() + offset * 3600000);
                 const utcDateStr = candidateUTC.toISOString().slice(0, 10);
@@ -675,18 +640,10 @@
             return { date_utc: localDateStr, hour_utc: localHour };
         }
 
-        // Convert UTC date + hour to local date + hour (in user's timezone)
         function utcToLocal(utcDateStr, utcHour) {
             const tz = getUserTimezone();
             const utcDt = new Date(`${utcDateStr}T${String(utcHour).padStart(2,'0')}:00:00Z`);
-            const formatter = new Intl.DateTimeFormat('en-CA', {
-                timeZone: tz,
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                hour: 'numeric',
-                hour12: false
-            });
+            const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: 'numeric', hour12: false });
             const parts = formatter.formatToParts(utcDt);
             let year, month, day, hour;
             parts.forEach(p => {
@@ -699,7 +656,6 @@
             return { date_local: `${year}-${month}-${day}`, hour_local: hour };
         }
 
-        // Build a local-keyed cache from the UTC cache for a specific local date
         function getLocalSlotsForDate(localDateStr) {
             const localSlots = {};
             for (const [utcKey, people] of Object.entries(slotsCache)) {
@@ -715,25 +671,14 @@
             return localSlots;
         }
 
-        // ===== User Initials (locked after set) =====
-        function getInitials() {
-            return localStorage.getItem('userInitials') || '';
-        }
-
-        function getUserName() {
-            return localStorage.getItem('userName') || '';
-        }
-
-        function isInitialsLocked() {
-            return localStorage.getItem('initialsLocked') === 'true';
-        }
-
+        function getInitials() { return localStorage.getItem('userInitials') || ''; }
+        function getUserName() { return localStorage.getItem('userName') || ''; }
+        function isInitialsLocked() { return localStorage.getItem('initialsLocked') === 'true'; }
         function lockInitials(initials, name) {
             localStorage.setItem('userInitials', initials);
             localStorage.setItem('userName', name);
             localStorage.setItem('initialsLocked', 'true');
         }
-
         function resetUser() {
             if (confirm('This will clear your profile. You will need to set up again. Continue?')) {
                 localStorage.removeItem('userInitials');
@@ -743,11 +688,8 @@
             }
         }
 
-        // ===== Setup Overlay =====
         function populateTimezoneSelect(selectEl, selectedValue) {
-            selectEl.innerHTML = TIMEZONES.map(tz =>
-                `<option value="${tz.value}" ${tz.value === selectedValue ? 'selected' : ''}>${tz.label}</option>`
-            ).join('');
+            selectEl.innerHTML = TIMEZONES.map(tz => `<option value="${tz.value}" ${tz.value === selectedValue ? 'selected' : ''}>${tz.label}</option>`).join('');
         }
 
         function showSetupIfNeeded() {
@@ -768,46 +710,30 @@
             const initials = document.getElementById('setup-initials').value.toUpperCase().replace(/[^A-Z]/g, '');
             const tz = document.getElementById('setup-tz').value;
             const errorEl = document.getElementById('setup-error');
-
-            if (!name) {
-                errorEl.textContent = 'Please enter your name.';
-                return;
-            }
-            if (initials.length < 2) {
-                errorEl.textContent = 'Please enter at least 2 letters for your initials.';
-                return;
-            }
-
+            if (!name) { errorEl.textContent = 'Please enter your name.'; return; }
+            if (initials.length < 2) { errorEl.textContent = 'Please enter at least 2 letters for your initials.'; return; }
             lockInitials(initials, name);
             setUserTimezone(tz);
             document.getElementById('setup-overlay').style.display = 'none';
             document.getElementById('user-display').textContent = `Logged in as: ${name} (${initials})`;
             document.getElementById('btn-reset-user').style.display = 'inline-block';
-
             const tzSelect = document.getElementById('tz-select');
             tzSelect.value = tz;
-
             registerTimezone(initials, name, tz);
             renderDatesPanel();
         });
 
         document.getElementById('btn-reset-user').addEventListener('click', resetUser);
 
-        // ===== Timezone Select in Header =====
         const tzSelect = document.getElementById('tz-select');
         populateTimezoneSelect(tzSelect, getUserTimezone());
         tzSelect.addEventListener('change', () => {
             setUserTimezone(tzSelect.value);
-            if (isInitialsLocked()) {
-                registerTimezone(getInitials(), getUserName(), tzSelect.value);
-            }
+            if (isInitialsLocked()) { registerTimezone(getInitials(), getUserName(), tzSelect.value); }
             renderDatesPanel();
-            if (currentDate) {
-                renderSchedule(currentDate);
-            }
+            if (currentDate) { renderSchedule(currentDate); }
         });
 
-        // ===== Date Generation =====
         function formatDate(date) {
             const y = date.getFullYear();
             const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -818,12 +744,7 @@
         function getLocalNow() {
             const tz = getUserTimezone();
             const now = new Date();
-            const parts = new Intl.DateTimeFormat('en-CA', {
-                timeZone: tz,
-                year: 'numeric', month: '2-digit', day: '2-digit',
-                hour: 'numeric', hour12: false, minute: 'numeric'
-            }).formatToParts(now);
-
+            const parts = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: 'numeric', hour12: false, minute: 'numeric' }).formatToParts(now);
             let year, month, day, hour, minute;
             parts.forEach(p => {
                 if (p.type === 'year') year = p.value;
@@ -836,15 +757,8 @@
             return { date: `${year}-${month}-${day}`, hour, minute };
         }
 
-        function getDayName(dateStr) {
-            const d = new Date(dateStr + 'T12:00:00');
-            return d.toLocaleDateString('en-US', { weekday: 'short' });
-        }
-
-        function getMonthDay(dateStr) {
-            const d = new Date(dateStr + 'T12:00:00');
-            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        }
+        function getDayName(dateStr) { return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' }); }
+        function getMonthDay(dateStr) { return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
 
         function getDateClass(dateStr) {
             const localNow = getLocalNow();
@@ -857,7 +771,6 @@
             const dates = [];
             const localNow = getLocalNow();
             const base = new Date(localNow.date + 'T12:00:00');
-
             for (let i = -7; i < 83; i++) {
                 const d = new Date(base);
                 d.setDate(d.getDate() + i);
@@ -866,30 +779,20 @@
             return dates;
         }
 
-        // ===== Render Dates Panel =====
         function renderDatesPanel() {
             const panel = document.getElementById('dates-panel');
             const dates = generateDates();
-
             panel.innerHTML = dates.map(dateStr => {
                 const dateClass = getDateClass(dateStr);
                 const activeClass = currentDate === dateStr ? ' active' : '';
-                return `<div class="date-item ${dateClass}${activeClass}" data-date="${dateStr}">
-                    <div class="day-name">${getDayName(dateStr)}</div>
-                    <div class="day-number">${getMonthDay(dateStr)}</div>
-                </div>`;
+                return `<div class="date-item ${dateClass}${activeClass}" data-date="${dateStr}"><div class="day-name">${getDayName(dateStr)}</div><div class="day-number">${getMonthDay(dateStr)}</div></div>`;
             }).join('');
-
             panel.querySelectorAll('.date-item').forEach(el => {
                 el.addEventListener('click', () => selectDate(el.dataset.date));
             });
-
-            if (!currentDate) {
-                selectDate(getLocalNow().date);
-            }
+            if (!currentDate) { selectDate(getLocalNow().date); }
         }
 
-        // ===== Select Date =====
         function selectDate(dateStr) {
             currentDate = dateStr;
             document.querySelectorAll('.date-item').forEach(el => {
@@ -898,7 +801,6 @@
             fetchSlots(dateStr);
         }
 
-        // ===== Fetch Slots =====
         async function fetchSlots(dateStr) {
             try {
                 const res = await fetch('/api/slots');
@@ -911,7 +813,6 @@
             }
         }
 
-        // ===== Render Schedule =====
         function isHourPast(localDateStr, localHour) {
             const localNow = getLocalNow();
             if (localDateStr < localNow.date) return true;
@@ -922,10 +823,7 @@
         function renderSchedule(localDateStr) {
             const panel = document.getElementById('schedule-panel');
             const d = new Date(localDateStr + 'T12:00:00');
-            const headerText = d.toLocaleDateString('en-US', {
-                weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
-            });
-
+            const headerText = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
             const tz = getUserTimezone();
             const refDate = new Date(`${localDateStr}T12:00:00Z`);
             const phoenixStr = refDate.toLocaleString('en-US', { timeZone: 'America/Phoenix', hour: 'numeric', minute: 'numeric', hour12: false });
@@ -966,18 +864,9 @@
                 if (isSelected) classes.push('selected');
                 if (pastHour) classes.push('past-hour');
 
-                const endH = (h + 1) % 24;
-                const endHour12 = endH === 0 ? 12 : (endH > 12 ? endH - 12 : endH);
-                const endAmpm = endH < 12 ? 'AM' : 'PM';
+                const contentHtml = badges.length > 0 ? `<div class="badges">${badges}</div>` : `<div class="empty-hint">No one</div>`;
 
-                const contentHtml = badges.length > 0
-                    ? `<div class="badges">${badges}</div>`
-                    : `<div class="empty-hint">No one</div>`;
-
-                html += `<button class="${classes.join(' ')}" data-hour="${h}" data-local-date="${localDateStr}">
-                    <div class="hour-label">${label}</div>
-                    ${contentHtml}
-                </button>`;
+                html += `<button class="${classes.join(' ')}" data-hour="${h}" data-local-date="${localDateStr}" ${pastHour ? 'disabled' : ''}><div class="hour-label">${label}</div>${contentHtml}</button>`;
             }
 
             html += `</div>`;
@@ -993,16 +882,14 @@
 
             panel.innerHTML = html;
 
-            panel.querySelectorAll('.hour-btn:not(.past-hour)').forEach(btn => {
+            panel.querySelectorAll('.hour-btn:not(:disabled)').forEach(btn => {
                 btn.addEventListener('click', () => toggleSlot(btn.dataset.hour, btn.dataset.localDate));
             });
 
-            document.getElementById('btn-clear-day').addEventListener('click', () => clearDay(localDateStr));
-            document.getElementById('btn-apply-week').addEventListener('click', () => applyWeek(localDateStr));
-            document.getElementById('btn-undo-week').addEventListener('click', () => undoWeek(localDateStr));
+            const clearBtn = document.getElementById('btn-clear-day');
+            if (clearBtn) clearBtn.addEventListener('click', () => clearDay(localDateStr));
         }
 
-        // ===== Toggle Slot =====
         function toggleSlot(hour, localDateStr) {
             const utc = localToUTC(localDateStr, parseInt(hour));
             fetch('/api/slots', {
@@ -1014,14 +901,9 @@
                     initials: getInitials(),
                     name: getUserName()
                 })
-            }).then(res => res.json())
-            .then(data => {
-                fetchSlots(localDateStr);
-            })
-            .catch(err => console.error('Toggle slot error:', err));
+            }).then(res => res.json()).then(data => { fetchSlots(localDateStr); }).catch(err => console.error('Toggle slot error:', err));
         }
 
-        // ===== API Helpers =====
         function registerTimezone(initials, name, tz) {
             fetch('/api/timezones', {
                 method: 'POST',
@@ -1034,8 +916,6 @@
             if (!confirm('Clear all your availability for this day?')) return;
             const localSlots = getLocalSlotsForDate(localDateStr);
             const userInitials = getInitials();
-            const utcDate = localDateStr; // simplified; in production should convert each hour
-
             Object.entries(localSlots).forEach(([hour, people]) => {
                 if (people.some(p => p.initials === userInitials)) {
                     const h = parseInt(hour);
@@ -1055,41 +935,30 @@
             setTimeout(() => fetchSlots(localDateStr), 500);
         }
 
-        function applyWeek(localDateStr) {
-            alert('Apply to whole week feature coming soon!');
-        }
-
-        function undoWeek(localDateStr) {
-            alert('Undo week feature coming soon!');
-        }
-
-        // ===== Socket.IO Events =====
         socket.on('connect', () => {
+            console.log('Connected to server');
             document.getElementById('connection-status').textContent = 'Connected';
             document.getElementById('connection-status').className = 'connected';
         });
 
         socket.on('disconnect', () => {
+            console.log('Disconnected from server');
             document.getElementById('connection-status').textContent = 'Disconnected';
             document.getElementById('connection-status').className = 'disconnected';
         });
 
         socket.on('slot_update', (data) => {
-            if (currentDate) {
-                fetchSlots(currentDate);
-            }
+            console.log('Slot update:', data);
+            if (currentDate) { fetchSlots(currentDate); }
         });
 
         socket.on('tz_update', (timezones) => {
-            console.log('Timezone update received:', timezones);
+            console.log('Timezone update:', timezones);
         });
 
-        // ===== INITIALIZATION =====
-        // Show setup overlay if needed OR load the application
+        // INITIALIZATION
         showSetupIfNeeded();
-        // Always populate the timezone selector
         populateTimezoneSelect(tzSelect, getUserTimezone());
-        // If user is locked in, render the dates panel and fetch slots
         if (isInitialsLocked()) {
             renderDatesPanel();
         }
