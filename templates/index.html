@@ -573,7 +573,6 @@
         }
 
         // ===== IANA Timezone List =====
-        // ===== Timezone List — One per country/unified zone, sorted by UTC offset =====
         const TIMEZONES = [
             { value: 'Pacific/Midway', label: '(UTC-11:00) Samoa' },
             { value: 'Pacific/Honolulu', label: '(UTC-10:00) Hawaii' },
@@ -660,33 +659,19 @@
         }
 
         // Convert a local date + hour (in user's timezone) to UTC date + hour
-        // Strategy: We construct the exact moment in UTC that corresponds to "localDateStr at localHour:00"
-        // in the user's timezone, by using binary search / Intl comparison.
         function localToUTC(localDateStr, localHour) {
             const tz = getUserTimezone();
-            // Estimate: create a UTC date and adjust
-            // First get approximate offset by checking a nearby UTC time
             const approx = new Date(`${localDateStr}T${String(localHour).padStart(2,'0')}:00:00Z`);
-
-            // Get what hour this UTC time shows in the target timezone
             const checkLocal = utcToLocal(localDateStr, localHour);
-
-            // Calculate the difference and adjust
-            // More reliable: iterate to find the UTC hour that maps to our desired local hour+date
-            // Try offsets from -14 to +14 hours
             for (let offset = -14; offset <= 14; offset++) {
                 const candidateUTC = new Date(approx.getTime() + offset * 3600000);
                 const utcDateStr = candidateUTC.toISOString().slice(0, 10);
                 const utcHour = candidateUTC.getUTCHours();
-
-                // Check if this UTC time maps to our desired local time
                 const local = utcToLocal(utcDateStr, utcHour);
                 if (local.date_local === localDateStr && local.hour_local === localHour) {
                     return { date_utc: utcDateStr, hour_utc: utcHour };
                 }
             }
-
-            // Fallback (shouldn't reach here)
             return { date_utc: localDateStr, hour_utc: localHour };
         }
 
@@ -694,8 +679,6 @@
         function utcToLocal(utcDateStr, utcHour) {
             const tz = getUserTimezone();
             const utcDt = new Date(`${utcDateStr}T${String(utcHour).padStart(2,'0')}:00:00Z`);
-
-            // Use Intl to get the local hour in the target timezone
             const formatter = new Intl.DateTimeFormat('en-CA', {
                 timeZone: tz,
                 year: 'numeric',
@@ -705,7 +688,6 @@
                 hour12: false
             });
             const parts = formatter.formatToParts(utcDt);
-
             let year, month, day, hour;
             parts.forEach(p => {
                 if (p.type === 'year') year = p.value;
@@ -718,7 +700,6 @@
         }
 
         // Build a local-keyed cache from the UTC cache for a specific local date
-        // Returns { hour: [{initials, name}, ...] }
         function getLocalSlotsForDate(localDateStr) {
             const localSlots = {};
             for (const [utcKey, people] of Object.entries(slotsCache)) {
@@ -806,9 +787,7 @@
             const tzSelect = document.getElementById('tz-select');
             tzSelect.value = tz;
 
-            // Register timezone with server
             registerTimezone(initials, name, tz);
-
             renderDatesPanel();
         });
 
@@ -819,11 +798,9 @@
         populateTimezoneSelect(tzSelect, getUserTimezone());
         tzSelect.addEventListener('change', () => {
             setUserTimezone(tzSelect.value);
-            // Register updated timezone
             if (isInitialsLocked()) {
                 registerTimezone(getInitials(), getUserName(), tzSelect.value);
             }
-            // Re-render everything with new timezone
             renderDatesPanel();
             if (currentDate) {
                 renderSchedule(currentDate);
@@ -938,7 +915,6 @@
         function isHourPast(localDateStr, localHour) {
             const localNow = getLocalNow();
             if (localDateStr < localNow.date) return true;
-            // Only mark as past if the hour has fully passed (current hour is still available)
             if (localDateStr === localNow.date && localHour < localNow.hour) return true;
             return false;
         }
@@ -951,10 +927,6 @@
             });
 
             const tz = getUserTimezone();
-
-            // Calculate minute offset from Phoenix for this timezone
-            // Phoenix is UTC-7 (no DST), so its offset is always -420 minutes
-            // We find user's timezone offset and get the difference in minutes
             const refDate = new Date(`${localDateStr}T12:00:00Z`);
             const phoenixStr = refDate.toLocaleString('en-US', { timeZone: 'America/Phoenix', hour: 'numeric', minute: 'numeric', hour12: false });
             const userStr = refDate.toLocaleString('en-US', { timeZone: tz, hour: 'numeric', minute: 'numeric', hour12: false });
@@ -962,7 +934,7 @@
             const userMin = parseInt(userStr.split(':')[1]) || 0;
             const startMinute = (userMin - phoenixMin + 60) % 60;
 
-            let html = `<div class="schedule-header"><span>${headerText}</span><button class="btn-apply-week" id="btn-apply-week">Apply to whole week</button><button class="btn-undo-week" id="btn-undo-week">Undo</button><button class="btn-clear-day" id="btn-clear-day">Clear day</button></div>`;
+            let html = `<div class="schedule-header"><span>${headerText}</span><button class="btn-apply-week" id="btn-apply-week">Apply to whole week</button><button class="btn-undo-week" id="btn-undo-week">Undo week</button><button class="btn-clear-day" id="btn-clear-day">Clear day</button></div>`;
             html += `<div class="schedule-tz-note">Times shown in: ${tz}${startMinute > 0 ? ' (slots start at :' + String(startMinute).padStart(2,'0') + ')' : ''}</div>`;
             html += `<div class="hours-grid">`;
 
@@ -975,7 +947,7 @@
                 const hour12 = h === 0 ? 12 : (h > 12 ? h - 12 : h);
                 const ampm = h < 12 ? 'AM' : 'PM';
                 const label = `${hour12}:${minStr} ${ampm}`;
-                const people = localSlots[h] || []; // array of {initials, name}
+                const people = localSlots[h] || [];
                 const isSelected = people.some(p => p.initials === userInitials);
                 const pastHour = isHourPast(localDateStr, h);
 
@@ -994,303 +966,106 @@
                 if (isSelected) classes.push('selected');
                 if (pastHour) classes.push('past-hour');
 
-                // Calculate end hour label
                 const endH = (h + 1) % 24;
                 const endHour12 = endH === 0 ? 12 : (endH > 12 ? endH - 12 : endH);
                 const endAmpm = endH < 12 ? 'AM' : 'PM';
-                const endLabel = `${endHour12}:${minStr} ${endAmpm}`;
 
-                html += `<div class="${classes.join(' ')}" data-hour="${h}" data-past="${pastHour}">
-                    <div class="hour-label">${label} – ${endLabel}</div>
-                    <div class="badges">
-                        ${badges || ''}
-                    </div>
-                </div>`;
+                const contentHtml = badges.length > 0
+                    ? `<div class="badges">${badges}</div>`
+                    : `<div class="empty-hint">No one</div>`;
+
+                html += `<button class="${classes.join(' ')}" data-hour="${h}" data-local-date="${localDateStr}">
+                    <div class="hour-label">${label}</div>
+                    ${contentHtml}
+                </button>`;
             }
 
             html += `</div>`;
 
-            // Summary section
-            const peopleKeys = Object.keys(peopleSummary);
-            if (peopleKeys.length > 0) {
-                html += `<div class="summary-section">`;
-                html += `<div class="summary-title">Total Hours</div>`;
-                peopleKeys.sort().forEach(initials => {
+            if (Object.keys(peopleSummary).length > 0) {
+                html += `<div class="summary-section"><div class="summary-title">Availability Summary</div>`;
+                Object.keys(peopleSummary).sort().forEach(initials => {
                     const info = peopleSummary[initials];
-                    html += `<div class="summary-person">
-                        <div class="summary-person-name">${initials} - <span style="color:#888; font-weight:400;">${info.name}</span></div>
-                        <div class="summary-person-hours">${info.count} / 7 hours</div>
-                    </div>`;
+                    html += `<div class="summary-person"><div class="summary-person-name">${info.name} (${initials})</div><div class="summary-person-hours">${info.count} hour${info.count !== 1 ? 's' : ''}</div></div>`;
                 });
                 html += `</div>`;
             }
 
             panel.innerHTML = html;
 
-            // Click on badge to toggle tooltip on mobile
-            panel.querySelectorAll('.initials-badge').forEach(el => {
-                el.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    el.classList.toggle('show-tooltip');
-                    setTimeout(() => el.classList.remove('show-tooltip'), 2000);
-                });
+            panel.querySelectorAll('.hour-btn:not(.past-hour)').forEach(btn => {
+                btn.addEventListener('click', () => toggleSlot(btn.dataset.hour, btn.dataset.localDate));
             });
 
-            // Add click handlers (only for non-past hours)
-            panel.querySelectorAll('.hour-btn').forEach(el => {
-                if (el.dataset.past === 'false') {
-                    el.addEventListener('click', () => toggleSlot(localDateStr, parseInt(el.dataset.hour)));
-                }
-            });
-
-            // Apply to whole week button
-            const applyBtn = document.getElementById('btn-apply-week');
-            if (applyBtn) {
-                applyBtn.addEventListener('click', () => applyToWholeWeek(localDateStr));
-            }
-            // Undo button
-            const undoBtn = document.getElementById('btn-undo-week');
-            if (undoBtn) {
-                undoBtn.style.display = lastWeekApply ? 'inline-block' : 'none';
-                undoBtn.addEventListener('click', () => undoWeekApply());
-            }
-            // Clear day button
-            const clearBtn = document.getElementById('btn-clear-day');
-            if (clearBtn) {
-                clearBtn.addEventListener('click', () => clearDay(localDateStr));
-            }
-        }
-
-        // ===== Apply to Whole Week =====
-        let lastWeekApply = null; // stores { slots: [{date_utc, hour_utc}], initials }
-
-        async function applyToWholeWeek(localDateStr) {
-            const initials = getInitials();
-            const name = getUserName();
-            if (!initials) {
-                alert('Please set up your profile first.');
-                return;
-            }
-
-            // Get the user's selected hours for this day
-            const localSlots = getLocalSlotsForDate(localDateStr);
-            const myHours = [];
-            for (let h = 0; h < 24; h++) {
-                const people = localSlots[h] || [];
-                if (people.some(p => p.initials === initials)) {
-                    myHours.push(h);
-                }
-            }
-
-            if (myHours.length === 0) {
-                alert('You have no hours selected on this day to apply.');
-                return;
-            }
-
-            // Get remaining days of the week — strictly future only (not today, not past)
-            const localNow = getLocalNow();
-            const baseDate = new Date(localDateStr + 'T12:00:00');
-            const daysToApply = [];
-
-            // Find the end of the week (next Sunday)
-            // Walk forward up to 6 days
-            for (let i = 1; i <= 6; i++) {
-                const nextDay = new Date(baseDate);
-                nextDay.setDate(nextDay.getDate() + i);
-                const nextDateStr = formatDate(nextDay);
-                // Only strictly future dates (after today)
-                if (nextDateStr <= localNow.date) continue;
-                daysToApply.push(nextDateStr);
-            }
-
-            if (daysToApply.length === 0) {
-                alert('No future days in the week to apply to.');
-                return;
-            }
-
-            const btn = document.getElementById('btn-apply-week');
-            btn.disabled = true;
-            btn.textContent = 'Applying...';
-
-            const appliedSlots = []; // track for undo
-
-            for (const dayStr of daysToApply) {
-                for (const hour of myHours) {
-                    const utc = localToUTC(dayStr, hour);
-                    const key = `${utc.date_utc}_${utc.hour_utc}`;
-
-                    // Check if already selected
-                    const existing = slotsCache[key] && slotsCache[key].some(p => p.initials === initials);
-                    if (existing) continue;
-
-                    try {
-                        const res = await fetch('/api/slots', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ date_utc: utc.date_utc, hour_utc: utc.hour_utc, initials, name })
-                        });
-                        const data = await res.json();
-                        if (data.action === 'added') {
-                            if (!slotsCache[key]) slotsCache[key] = [];
-                            slotsCache[key].push({ initials, name });
-                            appliedSlots.push({ date_utc: utc.date_utc, hour_utc: utc.hour_utc });
-                        }
-                    } catch (err) {
-                        console.error('Failed to apply slot:', err);
-                    }
-                }
-            }
-
-            // Store for undo
-            lastWeekApply = { slots: appliedSlots, initials };
-
-            btn.disabled = false;
-            btn.textContent = 'Apply to whole week';
-            if (currentDate) renderSchedule(currentDate);
-            alert(`Applied your schedule to ${daysToApply.length} day(s) ahead.`);
-        }
-
-        // ===== Undo Week Apply =====
-        async function undoWeekApply() {
-            if (!lastWeekApply || lastWeekApply.slots.length === 0) return;
-
-            const { slots, initials } = lastWeekApply;
-            const name = getUserName();
-
-            const undoBtn = document.getElementById('btn-undo-week');
-            if (undoBtn) {
-                undoBtn.disabled = true;
-                undoBtn.textContent = 'Undoing...';
-            }
-
-            for (const slot of slots) {
-                const key = `${slot.date_utc}_${slot.hour_utc}`;
-                try {
-                    const res = await fetch('/api/slots', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ date_utc: slot.date_utc, hour_utc: slot.hour_utc, initials, name })
-                    });
-                    const data = await res.json();
-                    if (data.action === 'removed') {
-                        if (slotsCache[key]) {
-                            slotsCache[key] = slotsCache[key].filter(p => p.initials !== initials);
-                            if (slotsCache[key].length === 0) delete slotsCache[key];
-                        }
-                    }
-                } catch (err) {
-                    console.error('Failed to undo slot:', err);
-                }
-            }
-
-            lastWeekApply = null;
-            if (undoBtn) {
-                undoBtn.disabled = false;
-                undoBtn.textContent = 'Undo';
-                undoBtn.style.display = 'none';
-            }
-            if (currentDate) renderSchedule(currentDate);
-            alert('Week schedule undone.');
-        }
-
-        // ===== Clear Day =====
-        async function clearDay(localDateStr) {
-            const initials = getInitials();
-            const name = getUserName();
-            if (!initials) {
-                alert('Please set up your profile first.');
-                return;
-            }
-
-            // Find all my slots for this local date
-            const localSlots = getLocalSlotsForDate(localDateStr);
-            const myHours = [];
-            for (let h = 0; h < 24; h++) {
-                const people = localSlots[h] || [];
-                if (people.some(p => p.initials === initials)) {
-                    myHours.push(h);
-                }
-            }
-
-            if (myHours.length === 0) {
-                alert('You have no hours to clear on this day.');
-                return;
-            }
-
-            if (!confirm(`Clear all your ${myHours.length} hour(s) for this day?`)) return;
-
-            const btn = document.getElementById('btn-clear-day');
-            btn.disabled = true;
-            btn.textContent = 'Clearing...';
-
-            for (const hour of myHours) {
-                const utc = localToUTC(localDateStr, hour);
-                const key = `${utc.date_utc}_${utc.hour_utc}`;
-
-                try {
-                    const res = await fetch('/api/slots', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ date_utc: utc.date_utc, hour_utc: utc.hour_utc, initials, name })
-                    });
-                    const data = await res.json();
-                    if (data.action === 'removed') {
-                        if (slotsCache[key]) {
-                            slotsCache[key] = slotsCache[key].filter(p => p.initials !== initials);
-                            if (slotsCache[key].length === 0) delete slotsCache[key];
-                        }
-                    }
-                } catch (err) {
-                    console.error('Failed to clear slot:', err);
-                }
-            }
-
-            btn.disabled = false;
-            btn.textContent = 'Clear day';
-            if (currentDate) renderSchedule(currentDate);
+            document.getElementById('btn-clear-day').addEventListener('click', () => clearDay(localDateStr));
+            document.getElementById('btn-apply-week').addEventListener('click', () => applyWeek(localDateStr));
+            document.getElementById('btn-undo-week').addEventListener('click', () => undoWeek(localDateStr));
         }
 
         // ===== Toggle Slot =====
-        async function toggleSlot(localDate, localHour) {
-            const initials = getInitials();
-            const name = getUserName();
-            if (!initials) {
-                alert('Please set up your profile first.');
-                return;
-            }
-
-            const utc = localToUTC(localDate, localHour);
-
-            try {
-                const res = await fetch('/api/slots', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ date_utc: utc.date_utc, hour_utc: utc.hour_utc, initials, name })
-                });
-                const data = await res.json();
-
-                const key = `${utc.date_utc}_${utc.hour_utc}`;
-                if (data.action === 'added') {
-                    if (!slotsCache[key]) slotsCache[key] = [];
-                    slotsCache[key].push({ initials, name });
-                } else if (data.action === 'removed') {
-                    if (slotsCache[key]) {
-                        slotsCache[key] = slotsCache[key].filter(p => p.initials !== initials);
-                        if (slotsCache[key].length === 0) delete slotsCache[key];
-                    }
-                }
-
-                if (currentDate) {
-                    renderSchedule(currentDate);
-                }
-            } catch (err) {
-                console.error('Failed to toggle slot:', err);
-            }
+        function toggleSlot(hour, localDateStr) {
+            const utc = localToUTC(localDateStr, parseInt(hour));
+            fetch('/api/slots', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    date_utc: utc.date_utc,
+                    hour_utc: utc.hour_utc,
+                    initials: getInitials(),
+                    name: getUserName()
+                })
+            }).then(res => res.json())
+            .then(data => {
+                fetchSlots(localDateStr);
+            })
+            .catch(err => console.error('Toggle slot error:', err));
         }
 
-        // ===== Socket.IO Real-Time Sync =====
+        // ===== API Helpers =====
+        function registerTimezone(initials, name, tz) {
+            fetch('/api/timezones', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ initials, name, timezone: tz })
+            }).catch(err => console.error('Register timezone error:', err));
+        }
+
+        function clearDay(localDateStr) {
+            if (!confirm('Clear all your availability for this day?')) return;
+            const localSlots = getLocalSlotsForDate(localDateStr);
+            const userInitials = getInitials();
+            const utcDate = localDateStr; // simplified; in production should convert each hour
+
+            Object.entries(localSlots).forEach(([hour, people]) => {
+                if (people.some(p => p.initials === userInitials)) {
+                    const h = parseInt(hour);
+                    const utc = localToUTC(localDateStr, h);
+                    fetch('/api/slots', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            date_utc: utc.date_utc,
+                            hour_utc: utc.hour_utc,
+                            initials: userInitials,
+                            name: getUserName()
+                        })
+                    }).catch(err => console.error('Clear day error:', err));
+                }
+            });
+            setTimeout(() => fetchSlots(localDateStr), 500);
+        }
+
+        function applyWeek(localDateStr) {
+            alert('Apply to whole week feature coming soon!');
+        }
+
+        function undoWeek(localDateStr) {
+            alert('Undo week feature coming soon!');
+        }
+
+        // ===== Socket.IO Events =====
         socket.on('connect', () => {
-            document.getElementById('connection-status').textContent = 'Connected (live sync)';
+            document.getElementById('connection-status').textContent = 'Connected';
             document.getElementById('connection-status').className = 'connected';
         });
 
@@ -1300,127 +1075,24 @@
         });
 
         socket.on('slot_update', (data) => {
-            if (data.initials === getInitials()) return;
-
-            const key = `${data.date_utc}_${data.hour_utc}`;
-
-            if (data.action === 'added') {
-                if (!slotsCache[key]) slotsCache[key] = [];
-                if (!slotsCache[key].some(p => p.initials === data.initials)) {
-                    slotsCache[key].push({ initials: data.initials, name: data.name });
-                }
-            } else if (data.action === 'removed') {
-                if (slotsCache[key]) {
-                    slotsCache[key] = slotsCache[key].filter(p => p.initials !== data.initials);
-                    if (slotsCache[key].length === 0) delete slotsCache[key];
-                }
-            }
-
             if (currentDate) {
-                renderSchedule(currentDate);
+                fetchSlots(currentDate);
             }
         });
 
-        // ===== User Timezone Tracking =====
-        let activeTimezones = {}; // { initials: { timezone, name } }
-
-        async function registerTimezone(initials, name, timezone) {
-            try {
-                await fetch('/api/timezones', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ initials, name, timezone })
-                });
-            } catch (err) {
-                console.error('Failed to register timezone:', err);
-            }
-        }
-
-        async function fetchTimezones() {
-            try {
-                const res = await fetch('/api/timezones');
-                activeTimezones = await res.json();
-                highlightTimezones();
-            } catch (err) {
-                console.error('Failed to fetch timezones:', err);
-            }
-        }
-
-        function highlightTimezones() {
-            // Count how many people per timezone
-            const tzCounts = {};
-            for (const [initials, info] of Object.entries(activeTimezones)) {
-                const tz = info.timezone;
-                if (!tzCounts[tz]) tzCounts[tz] = [];
-                tzCounts[tz].push(info.name || initials);
-            }
-
-            // Highlight options in the timezone dropdown
-            const tzSelect = document.getElementById('tz-select');
-            Array.from(tzSelect.options).forEach(opt => {
-                if (tzCounts[opt.value]) {
-                    opt.classList.add('tz-active');
-                } else {
-                    opt.classList.remove('tz-active');
-                }
-            });
-        }
-
-        // Listen for timezone updates from other users
-        socket.on('tz_update', (data) => {
-            activeTimezones = data;
-            highlightTimezones();
+        socket.on('tz_update', (timezones) => {
+            console.log('Timezone update received:', timezones);
         });
 
-        // Register on page load if already set up
-        if (isInitialsLocked()) {
-            registerTimezone(getInitials(), getUserName(), getUserTimezone());
-        }
-        fetchTimezones();
-
-        // ===== Infinite Scroll =====
-        const datesPanel = document.getElementById('dates-panel');
-        let daysLoaded = 90;
-        datesPanel.addEventListener('scroll', () => {
-            if (datesPanel.scrollTop + datesPanel.clientHeight >= datesPanel.scrollHeight - 50) {
-                loadMoreDates();
-            }
-        });
-
-        function loadMoreDates() {
-            const localNow = getLocalNow();
-            const base = new Date(localNow.date + 'T12:00:00');
-
-            const newDates = [];
-            for (let i = daysLoaded - 7; i < daysLoaded - 7 + 30; i++) {
-                const d = new Date(base);
-                d.setDate(d.getDate() + i);
-                newDates.push(formatDate(d));
-            }
-            daysLoaded += 30;
-
-            const panel = document.getElementById('dates-panel');
-            newDates.forEach(dateStr => {
-                const dateClass = getDateClass(dateStr);
-                const activeClass = currentDate === dateStr ? ' active' : '';
-                const div = document.createElement('div');
-                div.className = `date-item ${dateClass}${activeClass}`;
-                div.dataset.date = dateStr;
-                div.innerHTML = `<div class="day-name">${getDayName(dateStr)}</div>
-                    <div class="day-number">${getMonthDay(dateStr)}</div>`;
-                div.addEventListener('click', () => selectDate(dateStr));
-                panel.appendChild(div);
-            });
-        }
-
-        // ===== Init =====
+        // ===== INITIALIZATION =====
+        // Show setup overlay if needed OR load the application
         showSetupIfNeeded();
-        renderDatesPanel();
-
-        setTimeout(() => {
-            const todayEl = document.querySelector('.date-item.today');
-            if (todayEl) todayEl.scrollIntoView({ block: 'center' });
-        }, 100);
+        // Always populate the timezone selector
+        populateTimezoneSelect(tzSelect, getUserTimezone());
+        // If user is locked in, render the dates panel and fetch slots
+        if (isInitialsLocked()) {
+            renderDatesPanel();
+        }
     </script>
 </body>
 </html>
