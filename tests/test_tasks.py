@@ -33,7 +33,7 @@ class TaskBoardTests(unittest.TestCase):
         self.headers = {'X-Task-Request': '1'}
         for client, initials in ((self.alice, 'AA'), (self.bob, 'BB')):
             response = self.send(client, '/register', initials=initials, name=initials, password='a-long-password',
-                                 security_question='What is your favorite color?', security_answer='blue')
+                                 security_answer='blue')
             self.assertEqual(response.status_code, 200)
 
     def tearDown(self):
@@ -176,7 +176,7 @@ class TaskBoardTests(unittest.TestCase):
     def test_security_question_password_reset(self):
         response = self.visitor.get('/api/auth/security-question?initials=BB', headers=self.headers)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json['question'], 'What is your favorite color?')
+        self.assertEqual(response.json['question'], 'What is your nickname?')
         self.assertEqual(self.visitor.get('/api/tasks/security-question?initials=BB', headers=self.headers).status_code, 200)
         response = self.visitor.post('/api/auth/reset-password', headers=self.headers,
                                      json={'initials': 'BB', 'security_answer': 'BLUE', 'new_password': 'new-long-password'})

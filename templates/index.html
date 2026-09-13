@@ -575,9 +575,7 @@
             <input type="password" id="setup-password" maxlength="256" autocomplete="current-password" placeholder="Your task account password">
             <p class="muted" id="availability-register-note" hidden>Use at least 10 characters. This account will sign you into Availability and Tasks.</p>
             <div id="availability-recovery-fields" hidden>
-                <label for="setup-security-question">Password recovery question</label>
-                <input type="text" id="setup-security-question" maxlength="200" placeholder="Example: What city were you born in?">
-                <label for="setup-security-answer">Answer</label>
+                <label for="setup-security-answer">What is your nickname?</label>
                 <input type="text" id="setup-security-answer" maxlength="256" autocomplete="off">
             </div>
             <button type="button" class="text-button" id="availability-forgot-password">Forgot password?</button>
@@ -908,7 +906,6 @@
             document.getElementById('availability-recovery-fields').hidden = !registerMode;
             document.getElementById('availability-reset-fields').hidden = true;
             document.getElementById('availability-forgot-password').hidden = registerMode;
-            document.getElementById('setup-security-question').required = registerMode;
             document.getElementById('setup-security-answer').required = registerMode;
             document.getElementById('setup-confirm').textContent = registerMode ? 'Create account' : 'Sign in';
             document.getElementById('availability-login-tab').setAttribute('aria-pressed', String(!registerMode));
@@ -987,7 +984,6 @@
             const name = document.getElementById('setup-name').value.trim();
             const initials = document.getElementById('setup-initials').value.toUpperCase().replace(/[^A-Z]/g, '');
             const password = document.getElementById('setup-password').value;
-            const securityQuestion = document.getElementById('setup-security-question').value.trim();
             const securityAnswer = document.getElementById('setup-security-answer').value.trim();
             const tz = document.getElementById('setup-tz').value;
             const errorEl = document.getElementById('setup-error');
@@ -1011,7 +1007,7 @@
                 }
                 const response = await fetch(`/api/auth/${availabilityRegisterMode ? 'register' : 'login'}`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Task-Request': '1' },
-                    body: JSON.stringify({ initials, name, password, timezone: tz, security_question: securityQuestion, security_answer: securityAnswer })
+                    body: JSON.stringify({ initials, name, password, timezone: tz, security_answer: securityAnswer })
                 });
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error || 'Unable to authenticate.');

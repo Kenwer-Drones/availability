@@ -20,6 +20,7 @@ def register_tasks(app, socketio, get_db, postgres=False):
     attempts_lock = threading.Lock()
     cookie_name = 'task_session'
     admin_initials = 'CR'
+    recovery_question = 'What is your nickname?'
 
     @contextmanager
     def database(write=False):
@@ -231,7 +232,6 @@ def register_tasks(app, socketio, get_db, postgres=False):
         password = field(data, 'password', 256)
         if len(password) < 10:
             abort(400, description='Use a password of at least 10 characters.')
-        security_question = field(data, 'security_question', 200)
         security_answer = field(data, 'security_answer', 256)
         tz = field(data, 'timezone', 100, required=False) or 'America/Phoenix'
         try:
@@ -248,7 +248,7 @@ def register_tasks(app, socketio, get_db, postgres=False):
             run('''INSERT INTO task_accounts
                    (initials, password_hash, security_question, security_answer_hash)
                    VALUES (?, ?, ?, ?)''',
-                (initials, password_hash, security_question, generate_password_hash(security_answer.casefold())))
+                (initials, password_hash, recovery_question, generate_password_hash(security_answer.casefold())))
         socketio.emit('tz_update', directory())
         return session_response(initials)
 
@@ -272,10 +272,10 @@ def register_tasks(app, socketio, get_db, postgres=False):
         if not re.fullmatch(r'[A-Z]{2,3}', initials):
             abort(400, description='Enter valid initials.')
         with database() as run:
-            row = run('SELECT security_question FROM task_accounts WHERE initials=?', (initials,)).fetchone()
-        if not row or not row['security_question']:
+            row = run('SELECT security_answer_hash FROM task_accounts WHERE initials=?', (initials,)).fetchone()
+        if not row or not row['security_answer_hash']:
             abort(404, description='No password recovery question is set for this account.')
-        return jsonify(question=row['security_question'])
+        return jsonify(question=recovery_question)
 
     @bp.post('/api/tasks/reset-password')
     @bp.post('/api/auth/reset-password')

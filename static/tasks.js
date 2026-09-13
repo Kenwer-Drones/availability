@@ -272,7 +272,6 @@ function setAuthMode(mode) {
     $('forgot-password').hidden = mode;
     $('recovery-fields').hidden = true;
     $('register-recovery-fields').hidden = !mode;
-    $('auth-security-question').required = mode;
     $('auth-security-answer-create').required = mode;
     $('auth-password').required = true;
     $('name-field').hidden = !mode;
@@ -366,8 +365,7 @@ submitForm('account-form', 'auth-error', async () => {
     } else await api(registering ? '/register' : '/login', 'POST', {
         initials: $('auth-initials').value, name: $('auth-name').value,
         password: $('auth-password').value, timezone: localStorage.getItem('userTimezone') || ARIZONA,
-        security_question: $('auth-security-question')?.value || 'What is your account initials?',
-        security_answer: $('auth-security-answer-create')?.value || $('auth-initials').value
+        security_answer: $('auth-security-answer-create')?.value || ''
     });
     $('auth-password').value = '';
     $('account-dialog').close();
