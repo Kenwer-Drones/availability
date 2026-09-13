@@ -165,7 +165,6 @@ function taskCard(task) {
     card.dataset.taskId = task.id;
     card.draggable = !task.completed && !!boardState.user;
     if (card.draggable) {
-        card.title = 'Drag to reorder within this deadline';
         card.addEventListener('dragstart', event => {
             if (busy) { event.preventDefault(); return; }
             card.classList.add('dragging');
