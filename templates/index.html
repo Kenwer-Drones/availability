@@ -86,6 +86,33 @@
             font-weight: 600;
         }
 
+        .timezone-team {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+            max-width: 520px;
+        }
+
+        .timezone-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 3px 8px;
+            border-radius: 999px;
+            border: 1px solid var(--chip-border);
+            background: var(--chip-bg);
+            color: var(--chip-text);
+            font-size: 11px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .timezone-chip .tz-name {
+            color: #555;
+            font-weight: 500;
+        }
+
         .btn-lock {
             padding: 4px 10px;
             border: 1px solid #4caf50;
@@ -320,10 +347,11 @@
             width: 26px;
             height: 26px;
             border-radius: 50%;
-            background: #4285f4;
-            color: #fff;
+            background: var(--badge-bg, #e8f0fe);
+            color: var(--badge-text, #1a4f9c);
+            border: 1px solid var(--badge-border, #bcd3ff);
             font-size: 10px;
-            font-weight: 600;
+            font-weight: 700;
             position: relative;
             cursor: pointer;
         }
@@ -490,6 +518,7 @@
             <span id="user-display" style="font-size:13px; color:#333;"></span>
             <label for="tz-select">Timezone:</label>
             <select id="tz-select"></select>
+            <div class="timezone-team" id="timezone-team"></div>
             <button class="btn-reset" id="btn-reset-user" style="display:none;"></button>
         </div>
     </header>
@@ -524,21 +553,42 @@
         const socket = io();
         let currentDate = null;
         let slotsCache = {};
+        let timezonesCache = {};
+        let lastWeekApply = null;
         const STANDARD_TIMEZONE = 'America/Phoenix';
 
-        const USER_COLORS = ['#e74c3c', '#3498db', '#f39c12', '#9b59b6', '#1abc9c', '#e91e63', '#00bcd4', '#ff5722', '#673ab7', '#009688', '#795548', '#607d8b', '#c2185b', '#d84315', '#7b1fa2', '#00897b', '#f57c00', '#5c6bc0', '#ef5350', '#26a69a'];
+        const USER_COLORS = [
+            { bg: '#fde8e8', text: '#9b1c1c', border: '#f8b4b4' },
+            { bg: '#e1effe', text: '#1e429f', border: '#a4cafe' },
+            { bg: '#fef3c7', text: '#92400e', border: '#fcd34d' },
+            { bg: '#ede9fe', text: '#5b21b6', border: '#c4b5fd' },
+            { bg: '#def7ec', text: '#03543f', border: '#84e1bc' },
+            { bg: '#fce8f3', text: '#99154b', border: '#f8b4d9' },
+            { bg: '#e0f2fe', text: '#075985', border: '#7dd3fc' },
+            { bg: '#ffedd5', text: '#9a3412', border: '#fdba74' },
+            { bg: '#e5e7eb', text: '#374151', border: '#cbd5e1' },
+            { bg: '#dcfce7', text: '#166534', border: '#86efac' },
+            { bg: '#fae8ff', text: '#86198f', border: '#e879f9' },
+            { bg: '#ccfbf1', text: '#115e59', border: '#5eead4' }
+        ];
         const userColorAssignments = {};
-        let colorIndex = 0;
 
         function getColorForUser(initials) {
             if (userColorAssignments[initials]) return userColorAssignments[initials];
-            userColorAssignments[initials] = USER_COLORS[colorIndex % USER_COLORS.length];
-            colorIndex++;
+            const used = new Set(Object.values(userColorAssignments).map(c => c.bg));
+            const available = USER_COLORS.find(color => !used.has(color.bg)) || USER_COLORS[Object.keys(userColorAssignments).length % USER_COLORS.length];
+            userColorAssignments[initials] = available;
             return userColorAssignments[initials];
+        }
+
+        function getColorStyleVars(initials, prefix = 'badge') {
+            const color = getColorForUser(initials);
+            return `--${prefix}-bg:${color.bg}; --${prefix}-text:${color.text}; --${prefix}-border:${color.border};`;
         }
 
         function assignColorsFromCache() {
             const allInitials = new Set();
+            Object.keys(timezonesCache).forEach(initials => allInitials.add(initials));
             for (const people of Object.values(slotsCache)) {
                 for (const p of people) {
                     allInitials.add(p.initials);
@@ -710,8 +760,40 @@
             }
         }
 
+        function getTimezoneLabel(value) {
+            const match = TIMEZONES.find(tz => tz.value === value);
+            return match ? match.label.replace(/^\([^)]*\)\s*/, '') : value;
+        }
+
         function populateTimezoneSelect(selectEl, selectedValue) {
             selectEl.innerHTML = TIMEZONES.map(tz => `<option value="${tz.value}" ${tz.value === selectedValue ? 'selected' : ''}>${tz.label}</option>`).join('');
+        }
+
+        function renderTimezoneTeam() {
+            const el = document.getElementById('timezone-team');
+            if (!el) return;
+            const entries = Object.entries(timezonesCache).sort(([a], [b]) => a.localeCompare(b));
+            if (entries.length === 0) {
+                el.innerHTML = '';
+                return;
+            }
+            el.innerHTML = entries.map(([initials, info]) => {
+                const displayName = info.name || initials;
+                const tzName = getTimezoneLabel(info.timezone);
+                return `<span class="timezone-chip" style="${getColorStyleVars(initials, 'chip')}" title="${displayName} works from ${info.timezone}">${initials}<span class="tz-name">${tzName}</span></span>`;
+            }).join('');
+        }
+
+        async function fetchTimezones() {
+            try {
+                const res = await fetch('/api/timezones');
+                timezonesCache = await res.json();
+                assignColorsFromCache();
+                renderTimezoneTeam();
+                if (currentDate) renderSchedule(currentDate);
+            } catch (err) {
+                console.error('Failed to fetch timezones:', err);
+            }
         }
 
         function showSetupIfNeeded() {
@@ -741,6 +823,9 @@
             document.getElementById('btn-reset-user').style.display = 'inline-block';
             const tzSelect = document.getElementById('tz-select');
             tzSelect.value = tz;
+            timezonesCache[initials] = { timezone: tz, name };
+            assignColorsFromCache();
+            renderTimezoneTeam();
             registerTimezone(initials, name, tz);
             renderDatesPanel();
         });
@@ -751,7 +836,12 @@
         populateTimezoneSelect(tzSelect, getUserTimezone());
         tzSelect.addEventListener('change', () => {
             setUserTimezone(tzSelect.value);
-            if (isInitialsLocked()) { registerTimezone(getInitials(), getUserName(), tzSelect.value); }
+            if (isInitialsLocked()) {
+                timezonesCache[getInitials()] = { timezone: tzSelect.value, name: getUserName() };
+                assignColorsFromCache();
+                renderTimezoneTeam();
+                registerTimezone(getInitials(), getUserName(), tzSelect.value);
+            }
             renderDatesPanel();
             if (currentDate) { renderSchedule(currentDate); }
         });
@@ -855,9 +945,8 @@
                 });
 
                 const badges = people.map(p => {
-                    const color = getColorForUser(p.initials);
                     const displayName = p.name || p.initials;
-                    return `<span class="initials-badge" style="background:${color}" data-name="${displayName}">${p.initials}<span class="badge-tooltip">${displayName}</span></span>`;
+                    return `<span class="initials-badge" style="${getColorStyleVars(p.initials)}" data-name="${displayName}">${p.initials}<span class="badge-tooltip">${displayName}</span></span>`;
                 }).join('');
 
                 const classes = ['hour-btn'];
@@ -886,8 +975,133 @@
                 btn.addEventListener('click', () => toggleSlot(btn.dataset.hour, btn.dataset.standardDate));
             });
 
+            const applyBtn = document.getElementById('btn-apply-week');
+            if (applyBtn) applyBtn.addEventListener('click', () => applyToWholeWeek(localDateStr));
+
+            const undoBtn = document.getElementById('btn-undo-week');
+            if (undoBtn) {
+                undoBtn.style.display = lastWeekApply ? 'inline-block' : 'none';
+                undoBtn.addEventListener('click', () => undoWeekApply());
+            }
+
             const clearBtn = document.getElementById('btn-clear-day');
             if (clearBtn) clearBtn.addEventListener('click', () => clearDay(localDateStr));
+        }
+
+        async function applyToWholeWeek(standardDateStr) {
+            const initials = getInitials();
+            const name = getUserName();
+            if (!initials) {
+                alert('Please set up your profile first.');
+                return;
+            }
+
+            const myHours = [];
+            for (let h = 0; h < 24; h++) {
+                const people = getPeopleForStandardSlot(standardDateStr, h);
+                if (people.some(p => p.initials === initials)) myHours.push(h);
+            }
+
+            if (myHours.length === 0) {
+                alert('You have no hours selected on this Arizona day to apply.');
+                return;
+            }
+
+            const standardNow = getStandardNow();
+            const baseDate = new Date(standardDateStr + 'T12:00:00');
+            const daysToApply = [];
+            for (let i = 1; i <= 6; i++) {
+                const nextDay = new Date(baseDate);
+                nextDay.setDate(nextDay.getDate() + i);
+                const nextDateStr = formatDate(nextDay);
+                if (nextDateStr <= standardNow.date) continue;
+                daysToApply.push(nextDateStr);
+            }
+
+            if (daysToApply.length === 0) {
+                alert('No future Arizona days in the week to apply to.');
+                return;
+            }
+
+            const btn = document.getElementById('btn-apply-week');
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = 'Applying...';
+            }
+
+            const appliedSlots = [];
+
+            for (const dayStr of daysToApply) {
+                for (const hour of myHours) {
+                    const utc = standardSlotToUTC(dayStr, hour);
+                    const key = `${utc.date_utc}_${utc.hour_utc}`;
+                    const existing = slotsCache[key] && slotsCache[key].some(p => p.initials === initials);
+                    if (existing) continue;
+
+                    try {
+                        const res = await fetch('/api/slots', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ date_utc: utc.date_utc, hour_utc: utc.hour_utc, initials, name })
+                        });
+                        const data = await res.json();
+                        if (data.action === 'added') {
+                            if (!slotsCache[key]) slotsCache[key] = [];
+                            slotsCache[key].push({ initials, name });
+                            appliedSlots.push({ date_utc: utc.date_utc, hour_utc: utc.hour_utc });
+                        }
+                    } catch (err) {
+                        console.error('Failed to apply slot:', err);
+                    }
+                }
+            }
+
+            lastWeekApply = { slots: appliedSlots, initials };
+
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Apply to whole week';
+            }
+            if (currentDate) renderSchedule(currentDate);
+            alert(`Applied your Arizona schedule to ${daysToApply.length} day(s) ahead.`);
+        }
+
+        async function undoWeekApply() {
+            if (!lastWeekApply || lastWeekApply.slots.length === 0) return;
+            const { slots, initials } = lastWeekApply;
+            const name = getUserName();
+            const undoBtn = document.getElementById('btn-undo-week');
+            if (undoBtn) {
+                undoBtn.disabled = true;
+                undoBtn.textContent = 'Undoing...';
+            }
+
+            for (const slot of slots) {
+                const key = `${slot.date_utc}_${slot.hour_utc}`;
+                try {
+                    const res = await fetch('/api/slots', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ date_utc: slot.date_utc, hour_utc: slot.hour_utc, initials, name })
+                    });
+                    const data = await res.json();
+                    if (data.action === 'removed' && slotsCache[key]) {
+                        slotsCache[key] = slotsCache[key].filter(p => p.initials !== initials);
+                        if (slotsCache[key].length === 0) delete slotsCache[key];
+                    }
+                } catch (err) {
+                    console.error('Failed to undo slot:', err);
+                }
+            }
+
+            lastWeekApply = null;
+            if (undoBtn) {
+                undoBtn.disabled = false;
+                undoBtn.textContent = 'Undo week';
+                undoBtn.style.display = 'none';
+            }
+            if (currentDate) renderSchedule(currentDate);
+            alert('Week schedule undone.');
         }
 
         function toggleSlot(hour, standardDateStr) {
@@ -953,12 +1167,21 @@
 
         socket.on('tz_update', (timezones) => {
             console.log('Timezone update:', timezones);
+            timezonesCache = timezones || {};
+            assignColorsFromCache();
+            renderTimezoneTeam();
+            if (currentDate) renderSchedule(currentDate);
         });
 
         // INITIALIZATION
         showSetupIfNeeded();
         populateTimezoneSelect(tzSelect, getUserTimezone());
+        fetchTimezones();
         if (isInitialsLocked()) {
+            timezonesCache[getInitials()] = { timezone: getUserTimezone(), name: getUserName() };
+            assignColorsFromCache();
+            renderTimezoneTeam();
+            registerTimezone(getInitials(), getUserName(), getUserTimezone());
             renderDatesPanel();
         }
     </script>
