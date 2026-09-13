@@ -138,7 +138,7 @@ except Exception as _e:
 
 from tasks import register_tasks
 
-get_user_directory, save_user_profile = register_tasks(app, socketio, get_db, bool(DATABASE_URL))
+get_user_directory, save_user_profile, get_authenticated_user = register_tasks(app, socketio, get_db, bool(DATABASE_URL))
 
 
 @app.route('/')
@@ -187,12 +187,16 @@ def debug():
 @app.route('/api/timezones', methods=['GET'])
 def get_timezones():
     """Get all registered user timezones."""
+    if not get_authenticated_user():
+        return jsonify({'error': 'Sign in to view team timezones.'}), 401
     return jsonify(get_user_directory())
 
 
 @app.route('/api/timezones', methods=['POST'])
 def set_timezone():
     """Register a user's timezone."""
+    if not get_authenticated_user():
+        return jsonify({'error': 'Sign in to update your timezone.'}), 401
     data = request.get_json()
     initials = data.get('initials', '').strip().upper()
     timezone = data.get('timezone', '').strip()
@@ -211,6 +215,8 @@ def set_timezone():
 
 @app.route('/api/slots', methods=['GET'])
 def get_slots():
+    if not get_authenticated_user():
+        return jsonify({'error': 'Sign in to view availability.'}), 401
     try:
         rows = query_all_slots()
     except Exception as e:
@@ -235,6 +241,8 @@ def get_slots():
 
 @app.route('/api/slots', methods=['POST'])
 def toggle_slot():
+    if not get_authenticated_user():
+        return jsonify({'error': 'Sign in to update availability.'}), 401
     data = request.get_json()
     date_utc = data.get('date_utc')
     hour_utc = data.get('hour_utc')

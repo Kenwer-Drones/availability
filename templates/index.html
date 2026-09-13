@@ -517,6 +517,11 @@
             font-size: 12px;
             margin-top: 6px;
         }
+
+        .auth-tabs { display:flex; gap:6px; margin-bottom:16px; }
+        .auth-tabs button { margin:0; width:auto; padding:7px 10px; background:#fff; color:#555; border:1px solid #ccc; }
+        .auth-tabs button[aria-pressed="true"] { background:#eaf0fd; color:#2855b6; border-color:#afc4ef; }
+        .setup-box .muted { color:#777; font-size:12px; line-height:1.4; }
     </style>
 </head>
 <body>
@@ -528,7 +533,7 @@
             <label for="tz-select">Timezone:</label>
             <select id="tz-select"></select>
             <div class="timezone-team" id="timezone-team"></div>
-            <button class="btn-reset" id="btn-reset-user" style="display:none;"></button>
+            <button class="btn-reset" id="btn-reset-user" style="display:none;">Sign out</button>
         </div>
     </header>
 
@@ -545,21 +550,28 @@
 
     <div class="setup-overlay" id="setup-overlay" style="display:none;">
         <div class="setup-box">
-            <h2>Welcome! Set up your profile</h2>
+            <h2 id="auth-title">Sign in to Team Availability</h2>
+            <div class="auth-tabs" role="group" aria-label="Account action">
+                <button type="button" id="availability-login-tab" aria-pressed="true">Sign in</button>
+                <button type="button" id="availability-register-tab" aria-pressed="false">Create account</button>
+            </div>
             <label for="setup-name">Your Name</label>
             <input type="text" id="setup-name" maxlength="30" placeholder="John Doe" style="text-transform:none;">
             <label for="setup-initials">Your Initials (2-3 letters)</label>
             <input type="text" id="setup-initials" maxlength="3" placeholder="JD">
+            <label for="setup-password">Password</label>
+            <input type="password" id="setup-password" maxlength="256" autocomplete="current-password" placeholder="Your task account password">
+            <p class="muted" id="availability-register-note" hidden>Use at least 10 characters. This account will sign you into Availability and Tasks.</p>
             <label for="setup-tz">Your Timezone</label>
             <select id="setup-tz"></select>
             <div class="error" id="setup-error"></div>
-            <button id="setup-confirm">Confirm</button>
+            <button id="setup-confirm">Sign in</button>
         </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
     <script>
-        const socket = io();
+        const socket = typeof io === 'function' ? io() : { on() {} };
         let currentDate = null;
         let slotsCache = {};
         let timezonesCache = {};
@@ -786,8 +798,11 @@
             localStorage.setItem('userName', name);
             localStorage.setItem('initialsLocked', 'true');
         }
-        function resetUser() {
-            if (confirm('This will clear your profile. You will need to set up again. Continue?')) {
+        async function resetUser() {
+            if (!confirm('Sign out of Team Availability and Tasks?')) return;
+            try {
+                await fetch('/api/auth/logout', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Task-Request': '1' }, body: '{}' });
+            } finally {
                 localStorage.removeItem('userInitials');
                 localStorage.removeItem('userName');
                 localStorage.removeItem('initialsLocked');
@@ -836,7 +851,8 @@
 
         async function fetchTimezones() {
             try {
-                const res = await fetch('/api/timezones');
+                const res = await fetch('/api/timezones', { cache: 'no-store' });
+                if (res.status === 401) return;
                 timezonesCache = await res.json();
                 assignColorsFromCache();
                 setCurrentUserColorVars();
@@ -848,40 +864,98 @@
             }
         }
 
-        function showSetupIfNeeded() {
+        let availabilityRegisterMode = false;
+
+        function setAvailabilityAuthMode(registerMode) {
+            availabilityRegisterMode = registerMode;
+            document.getElementById('auth-title').textContent = registerMode ? 'Create your team account' : 'Sign in to Team Availability';
+            document.getElementById('setup-name').parentElement.style.display = registerMode ? '' : '';
+            document.getElementById('setup-name').style.display = registerMode ? '' : 'none';
+            document.querySelector('label[for="setup-name"]').style.display = registerMode ? '' : 'none';
+            document.getElementById('setup-password').autocomplete = registerMode ? 'new-password' : 'current-password';
+            document.getElementById('setup-password').minLength = registerMode ? 10 : 1;
+            document.getElementById('availability-register-note').hidden = !registerMode;
+            document.getElementById('setup-confirm').textContent = registerMode ? 'Create account' : 'Sign in';
+            document.getElementById('availability-login-tab').setAttribute('aria-pressed', String(!registerMode));
+            document.getElementById('availability-register-tab').setAttribute('aria-pressed', String(registerMode));
+            document.getElementById('setup-error').textContent = '';
+        }
+
+        async function showSetupIfNeeded() {
+            try {
+                const res = await fetch('/api/auth/session', { cache: 'no-store' });
+                const session = await res.json();
+                if (session.user && session.profile) {
+                    lockInitials(session.user, session.profile.name || session.user);
+                    setUserTimezone(session.profile.timezone || STANDARD_TIMEZONE);
+                    document.getElementById('setup-overlay').style.display = 'none';
+                    document.getElementById('user-display').textContent = `Logged in as: ${session.profile.name || session.user} (${session.user})`;
+                    document.getElementById('btn-reset-user').style.display = 'inline-block';
+                    return true;
+                }
+            } catch (err) {
+                document.getElementById('setup-error').textContent = 'Unable to connect. Please try again.';
+            }
+            setAvailabilityAuthMode(false);
+            document.getElementById('setup-overlay').style.display = 'flex';
+            const setupTz = document.getElementById('setup-tz');
+            const detectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone || STANDARD_TIMEZONE;
+            populateTimezoneSelect(setupTz, detectedTz);
+            document.getElementById('setup-password').focus();
+            return false;
+        }
+
+        async function initializeAvailability() {
+            if (!await showSetupIfNeeded()) return;
+            const tzSelect = document.getElementById('tz-select');
+            populateTimezoneSelect(tzSelect, getUserTimezone());
+            await fetchTimezones();
+            timezonesCache[getInitials()] = { timezone: getUserTimezone(), name: getUserName() };
+            assignColorsFromCache();
+            renderTimezoneTeam();
+            registerTimezone(getInitials(), getUserName(), getUserTimezone());
+            renderDatesPanel();
+        }
+
+        document.getElementById('availability-login-tab').addEventListener('click', () => setAvailabilityAuthMode(false));
+        document.getElementById('availability-register-tab').addEventListener('click', () => setAvailabilityAuthMode(true));
+
+        document.getElementById('setup-confirm').addEventListener('click', async () => {
+            const name = document.getElementById('setup-name').value.trim();
+            const initials = document.getElementById('setup-initials').value.toUpperCase().replace(/[^A-Z]/g, '');
+            const password = document.getElementById('setup-password').value;
+            const tz = document.getElementById('setup-tz').value;
+            const errorEl = document.getElementById('setup-error');
+            if (!initials || initials.length < 2 || initials.length > 3) { errorEl.textContent = 'Enter 2 or 3 letters for your initials.'; return; }
+            if (availabilityRegisterMode && !name) { errorEl.textContent = 'Please enter your name.'; return; }
+            if (!password || (availabilityRegisterMode && password.length < 10)) { errorEl.textContent = availabilityRegisterMode ? 'Use a password of at least 10 characters.' : 'Enter your password.'; return; }
+            const button = document.getElementById('setup-confirm');
+            button.disabled = true;
+            errorEl.textContent = '';
+            try {
+                const response = await fetch(`/api/auth/${availabilityRegisterMode ? 'register' : 'login'}`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Task-Request': '1' },
+                    body: JSON.stringify({ initials, name, password, timezone: tz })
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Unable to authenticate.');
+                document.getElementById('setup-password').value = '';
+                location.reload();
+            } catch (err) {
+                errorEl.textContent = err.message;
+                button.disabled = false;
+            }
+        });
+
+        /* The old browser-only profile flow is retained only for migration helpers. */
+        function legacySetupNoop() {
             if (isInitialsLocked()) {
                 document.getElementById('setup-overlay').style.display = 'none';
                 document.getElementById('user-display').textContent = `Logged in as: ${getUserName()} (${getInitials()})`;
                 document.getElementById('btn-reset-user').style.display = 'inline-block';
                 return;
             }
-            document.getElementById('setup-overlay').style.display = 'flex';
-            const setupTz = document.getElementById('setup-tz');
-            const detectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Phoenix';
-            populateTimezoneSelect(setupTz, detectedTz);
         }
-
-        document.getElementById('setup-confirm').addEventListener('click', () => {
-            const name = document.getElementById('setup-name').value.trim();
-            const initials = document.getElementById('setup-initials').value.toUpperCase().replace(/[^A-Z]/g, '');
-            const tz = document.getElementById('setup-tz').value;
-            const errorEl = document.getElementById('setup-error');
-            if (!name) { errorEl.textContent = 'Please enter your name.'; return; }
-            if (initials.length < 2) { errorEl.textContent = 'Please enter at least 2 letters for your initials.'; return; }
-            lockInitials(initials, name);
-            setUserTimezone(tz);
-            document.getElementById('setup-overlay').style.display = 'none';
-            document.getElementById('user-display').textContent = `Logged in as: ${name} (${initials})`;
-            document.getElementById('btn-reset-user').style.display = 'inline-block';
-            const tzSelect = document.getElementById('tz-select');
-            tzSelect.value = tz;
-            timezonesCache[initials] = { timezone: tz, name };
-            assignColorsFromCache();
-            refreshTimezoneSelects();
-            renderTimezoneTeam();
-            registerTimezone(initials, name, tz);
-            renderDatesPanel();
-        });
 
         document.getElementById('btn-reset-user').addEventListener('click', resetUser);
 
@@ -1248,18 +1322,9 @@
             if (currentDate) renderSchedule(currentDate);
         });
 
-        // INITIALIZATION
-        showSetupIfNeeded();
+        // INITIALIZATION: authentication gates all availability data.
         setCurrentUserColorVars();
-        populateTimezoneSelect(tzSelect, getUserTimezone());
-        fetchTimezones();
-        if (isInitialsLocked()) {
-            timezonesCache[getInitials()] = { timezone: getUserTimezone(), name: getUserName() };
-            assignColorsFromCache();
-            renderTimezoneTeam();
-            registerTimezone(getInitials(), getUserName(), getUserTimezone());
-            renderDatesPanel();
-        }
+        initializeAvailability();
     </script>
 </body>
 </html>

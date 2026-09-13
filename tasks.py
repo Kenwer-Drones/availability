@@ -87,6 +87,15 @@ def register_tasks(app, socketio, get_db, postgres=False):
     def digest(token):
         return hashlib.sha256(token.encode()).hexdigest()
 
+    def current_user():
+        token = request.cookies.get(cookie_name, '')
+        if not token:
+            return None
+        with database() as run:
+            row = run('SELECT initials FROM task_sessions WHERE token_hash=? AND expires_at>? ',
+                      (digest(token), now())).fetchone()
+        return row['initials'] if row else None
+
     def payload():
         data = request.get_json(silent=True)
         if not isinstance(data, dict):
@@ -116,18 +125,12 @@ def register_tasks(app, socketio, get_db, postgres=False):
 
     @bp.before_request
     def identity():
-        if not request.path.startswith('/api/tasks'):
+        if not (request.path.startswith('/api/tasks') or request.path.startswith('/api/auth')):
             return
         if request.method not in ('GET', 'HEAD', 'OPTIONS') and request.headers.get('X-Task-Request') != '1':
             abort(403, description='Missing task request header.')
         g.task_user = None
-        token = request.cookies.get(cookie_name, '')
-        if token:
-            with database() as run:
-                row = run('SELECT initials FROM task_sessions WHERE token_hash=? AND expires_at>?',
-                          (digest(token), now())).fetchone()
-                if row:
-                    g.task_user = row['initials']
+        g.task_user = current_user()
 
     @bp.errorhandler(400)
     @bp.errorhandler(401)
@@ -140,7 +143,7 @@ def register_tasks(app, socketio, get_db, postgres=False):
 
     @bp.after_request
     def prevent_stale_api_cache(response):
-        if request.path.startswith('/api/tasks'):
+        if request.path.startswith('/api/tasks') or request.path.startswith('/api/auth'):
             response.headers['Cache-Control'] = 'no-store'
         return response
 
@@ -177,7 +180,7 @@ def register_tasks(app, socketio, get_db, postgres=False):
                 (digest(token), initials, expires))
         response = jsonify(user=initials)
         response.set_cookie(cookie_name, token, httponly=True, secure=bool(postgres or request.is_secure),
-                            samesite='Lax', max_age=14 * 86400, path='/api/tasks')
+                            samesite='Lax', max_age=14 * 86400, path='/')
         return response
 
     @bp.get('/tasks')
@@ -185,10 +188,20 @@ def register_tasks(app, socketio, get_db, postgres=False):
         return render_template('tasks.html')
 
     @bp.get('/api/tasks/session')
+    @bp.get('/api/auth/session')
     def session_info():
-        return jsonify(user=g.task_user)
+        users = directory()
+        response = jsonify(user=g.task_user, profile=users.get(g.task_user) if g.task_user else None)
+        # Migrate sessions created before the cookie became site-wide.
+        legacy_token = request.cookies.get(cookie_name)
+        if g.task_user and legacy_token:
+            response.set_cookie(cookie_name, legacy_token, httponly=True,
+                                secure=bool(postgres or request.is_secure), samesite='Lax',
+                                max_age=14 * 86400, path='/')
+        return response
 
     @bp.post('/api/tasks/register')
+    @bp.post('/api/auth/register')
     def register():
         data = payload()
         initials = field(data, 'initials', 3).upper()
@@ -215,6 +228,7 @@ def register_tasks(app, socketio, get_db, postgres=False):
         return session_response(initials)
 
     @bp.post('/api/tasks/login')
+    @bp.post('/api/auth/login')
     def login():
         data = payload()
         initials = field(data, 'initials', 3).upper()
@@ -227,10 +241,12 @@ def register_tasks(app, socketio, get_db, postgres=False):
         return session_response(initials)
 
     @bp.post('/api/tasks/logout')
+    @bp.post('/api/auth/logout')
     def logout():
         with database(write=True) as run:
             run('DELETE FROM task_sessions WHERE token_hash=?', (digest(request.cookies.get(cookie_name, '')),))
         response = jsonify(status='ok')
+        response.delete_cookie(cookie_name, path='/')
         response.delete_cookie(cookie_name, path='/api/tasks')
         return response
 
@@ -345,4 +361,4 @@ def register_tasks(app, socketio, get_db, postgres=False):
 
     app.register_blueprint(bp)
     initialize()
-    return directory, save_profile
+    return directory, save_profile, current_user

@@ -17,18 +17,21 @@ Availability remains at `/`. The **Tasks** navigation link opens `/tasks`.
 
 ## Accounts
 
-The existing availability page uses self-declared initials, not authentication.
-Tasks therefore have separate password-protected accounts: **Sign in > Create
-account**, using the person's availability initials. Passwords require at least
-10 characters and are hashed with Werkzeug. Server-side sessions expire after
-14 days. Completion never trusts initials supplied by the browser.
+The whole site now uses one password-protected account session. On either
+Availability or Tasks, choose **Sign in > Create account** and use the person's
+availability initials. Passwords require at least 10 characters and are hashed
+with Werkzeug. The HttpOnly site-wide session lasts 14 days and survives page
+navigation, refreshes, and moving between Availability and Tasks. It is cleared
+only when the user signs out or the session expires. Completion never trusts
+initials supplied by the browser.
 
 Initial account registration is self-service and first-claim, consistent with
 the existing trusted-team profile setup. It does not verify a person's real-world
 identity: coordinate initial registration with the team. Once claimed, that
 initials account cannot be claimed again. This is not an invitation-only or
 email-verified identity system. Password recovery is not yet provided; do not
-share passwords. Availability itself remains unauthenticated.
+share passwords. Availability APIs and task APIs require the same authenticated
+session. Static page shells remain loadable so the sign-in dialog can be shown.
 
 ## Persistence And Deployment
 

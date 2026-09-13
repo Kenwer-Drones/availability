@@ -26,7 +26,7 @@ class TaskBoardTests(unittest.TestCase):
         self.app = Flask(__name__, template_folder='../templates')
         self.app.testing = True
         self.socket = Mock()
-        self.directory, self.save_profile = register_tasks(self.app, self.socket, get_db)
+        self.directory, self.save_profile, _ = register_tasks(self.app, self.socket, get_db)
         self.alice = self.app.test_client()
         self.bob = self.app.test_client()
         self.visitor = self.app.test_client()
@@ -146,8 +146,11 @@ class TaskBoardTests(unittest.TestCase):
         self.assertIn('HttpOnly', response.headers['Set-Cookie'])
         self.assertIn('SameSite=Lax', response.headers['Set-Cookie'])
         self.assertEqual(self.visitor.get('/api/tasks/session').json['user'], 'BB')
+        self.assertEqual(self.visitor.get('/api/auth/session').json['user'], 'BB')
+        self.assertIn('Path=/', response.headers['Set-Cookie'])
         self.send(self.visitor, '/logout')
         self.assertIsNone(self.visitor.get('/api/tasks/session').json['user'])
+        self.assertIsNone(self.visitor.get('/api/auth/session').json['user'])
 
     def test_expired_session_rejected(self):
         conn = self.get_db()
@@ -160,7 +163,7 @@ class TaskBoardTests(unittest.TestCase):
         self.create()
         self.save_profile('IN', 'India user', 'Asia/Kolkata')
         app2 = Flask('restarted')
-        directory, _ = register_tasks(app2, Mock(), self.get_db)
+        directory, _, _ = register_tasks(app2, Mock(), self.get_db)
         self.assertEqual(directory()['IN']['timezone'], 'Asia/Kolkata')
         self.assertEqual(len(app2.test_client().get('/api/tasks').json['tasks']), 1)
         self.assertEqual(app2.test_client().post('/api/tasks/login', json={'initials': 'BB', 'password': 'a-long-password'}, headers=self.headers).status_code, 200)

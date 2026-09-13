@@ -120,6 +120,28 @@ const net = require('node:net');
         await page.unroute('**/api/tasks');
         await page.locator('#retry').click();
         await page.getByRole('heading', { name: 'Research new test sites', exact: true }).waitFor();
+        const availability = await alice.newPage();
+        const availabilityErrors = [];
+        availability.on('pageerror', error => availabilityErrors.push(error.message));
+        await availability.goto('/');
+        await availability.waitForFunction(() => document.querySelector('#user-display')?.textContent.includes('Chiranjiva Rao'), null, { timeout: 5000 }).catch(async error => {
+            const diagnostics = await availability.evaluate(async () => ({
+                display: document.querySelector('#user-display')?.textContent,
+                overlay: document.querySelector('#setup-overlay')?.style.display,
+                session: await fetch('/api/auth/session').then(response => response.text())
+            }));
+            console.error('Availability diagnostics:', { ...diagnostics, errors: availabilityErrors });
+            throw error;
+        });
+        assert.match(await availability.locator('#user-display').textContent(), /Chiranjiva Rao/);
+        assert.equal(await availability.locator('#setup-overlay').isVisible(), false);
+        availability.once('dialog', dialog => dialog.accept());
+        await availability.locator('#btn-reset-user').click();
+        await availability.locator('#setup-overlay').waitFor();
+        assert.equal(await availability.locator('#availability-login-tab').getAttribute('aria-pressed'), 'true');
+        await page.reload();
+        await page.getByRole('button', { name: 'Sign in', exact: true }).waitFor();
+        await availability.close();
         assert.deepEqual(errors, []);
         console.log('Browser checks passed: assignment, Arizona/India deadlines, permission enforcement, editing, completion/reopen, ordering persistence, colors, mobile layout, sign-in, search, and error recovery.');
     } finally {
