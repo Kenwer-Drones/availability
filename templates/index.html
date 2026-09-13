@@ -545,12 +545,21 @@
         .auth-tabs button[aria-pressed="true"] { background:#eaf0fd; color:#2855b6; border-color:#afc4ef; }
         .setup-box .muted { color:#777; font-size:12px; line-height:1.4; }
         .text-button { margin: 10px 0 0 !important; width: auto !important; padding: 0 !important; background: transparent !important; color: #3367d6 !important; font-size: 12px; }
+        /* Match the Tasks title bar exactly. */
+        .site-header { min-height: 64px; border-bottom: 1px solid #e5e7eb; padding: 12px 24px; gap: 28px; }
+        .site-header nav { display: flex; gap: 18px; }
+        .site-header nav a { color: #3367d6; text-decoration: none; padding: 7px 0; font-size: 13px; }
+        .site-header nav a[aria-current] { font-weight: 600; border-bottom: 2px solid #3367d6; }
+        .site-header .account { margin-left: auto; display: flex; align-items: center; gap: 12px; min-width: 0; }
+        .site-header .account button { padding: 7px 12px; border: 1px solid #d9dce1; border-radius: 5px; background: #fff; color: inherit; font-size: 14px; cursor: pointer; }
+        .site-header .account button:hover { background: #f1f4f9; }
+        .site-header .account button[hidden] { display: none; }
     </style>
 </head>
 <body>
     <header class="site-header">
         <h1 class="site-title"><img src="/static/icon.png" alt="" width="26" height="26">Team Availability</h1>
-        <nav class="page-nav" aria-label="Pages"><a href="/" aria-current="page">Availability</a><a href="/tasks">Tasks</a></nav>
+        <nav aria-label="Pages"><a href="/" aria-current="page">Availability</a><a href="/tasks">Tasks</a></nav>
         <div class="account user-setup"><span id="user-display"></span><button id="admin-people" hidden>Manage people</button><button id="btn-reset-user" hidden>Sign out</button></div>
     </header>
 
@@ -802,7 +811,7 @@
                 if (session.user && session.profile) {
                     lockInitials(session.user, session.profile.name || session.user);
                     setUserTimezone(session.profile.timezone || STANDARD_TIMEZONE);
-                    document.getElementById('user-display').textContent = `Logged in as: ${session.profile.name || session.user} (${session.user})`;
+                    document.getElementById('user-display').textContent = session.profile.name || session.user;
                     document.getElementById('admin-people').hidden = session.user !== 'CR';
                     document.getElementById('btn-reset-user').hidden = false;
                     return true;
