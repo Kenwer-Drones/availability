@@ -162,6 +162,11 @@ function render() {
 }
 function taskCard(task) {
     const card = element('article', `task-card${task.completed ? ' completed' : ''}`);
+    const assigneeColor = boardState.users[task.assignee] ? getColors()[task.assignee] : null;
+    if (assigneeColor) {
+        card.style.setProperty('--task-bg', assigneeColor[0]);
+        card.style.setProperty('--task-border', assigneeColor[2]);
+    }
     card.dataset.taskId = task.id;
     card.draggable = !task.completed && !!boardState.user;
     if (card.draggable) {
