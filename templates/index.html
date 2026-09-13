@@ -524,6 +524,7 @@
         const socket = io();
         let currentDate = null;
         let slotsCache = {};
+        const STANDARD_TIMEZONE = 'America/Phoenix';
 
         const USER_COLORS = ['#e74c3c', '#3498db', '#f39c12', '#9b59b6', '#1abc9c', '#e91e63', '#00bcd4', '#ff5722', '#673ab7', '#009688', '#795548', '#607d8b', '#c2185b', '#d84315', '#7b1fa2', '#00897b', '#f57c00', '#5c6bc0', '#ef5350', '#26a69a'];
         const userColorAssignments = {};
@@ -625,50 +626,71 @@
         function getUserTimezone() { return localStorage.getItem('userTimezone') || 'America/Phoenix'; }
         function setUserTimezone(tz) { localStorage.setItem('userTimezone', tz); }
 
-        function localToUTC(localDateStr, localHour) {
-            const tz = getUserTimezone();
-            const approx = new Date(`${localDateStr}T${String(localHour).padStart(2,'0')}:00:00Z`);
-            for (let offset = -14; offset <= 14; offset++) {
-                const candidateUTC = new Date(approx.getTime() + offset * 3600000);
-                const utcDateStr = candidateUTC.toISOString().slice(0, 10);
-                const utcHour = candidateUTC.getUTCHours();
-                const local = utcToLocal(utcDateStr, utcHour);
-                if (local.date_local === localDateStr && local.hour_local === localHour) {
-                    return { date_utc: utcDateStr, hour_utc: utcHour };
-                }
-            }
-            return { date_utc: localDateStr, hour_utc: localHour };
-        }
-
-        function utcToLocal(utcDateStr, utcHour) {
-            const tz = getUserTimezone();
-            const utcDt = new Date(`${utcDateStr}T${String(utcHour).padStart(2,'0')}:00:00Z`);
-            const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: 'numeric', hour12: false });
-            const parts = formatter.formatToParts(utcDt);
-            let year, month, day, hour;
+        function getZonedParts(date, tz) {
+            const parts = new Intl.DateTimeFormat('en-CA', {
+                timeZone: tz,
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: 'numeric',
+                hour12: false,
+                minute: 'numeric'
+            }).formatToParts(date);
+            let year, month, day, hour, minute;
             parts.forEach(p => {
                 if (p.type === 'year') year = p.value;
                 if (p.type === 'month') month = p.value;
                 if (p.type === 'day') day = p.value;
                 if (p.type === 'hour') hour = parseInt(p.value);
+                if (p.type === 'minute') minute = parseInt(p.value);
             });
             if (hour === 24) hour = 0;
-            return { date_local: `${year}-${month}-${day}`, hour_local: hour };
+            return { date: `${year}-${month}-${day}`, hour, minute };
         }
 
-        function getLocalSlotsForDate(localDateStr) {
-            const localSlots = {};
-            for (const [utcKey, people] of Object.entries(slotsCache)) {
-                const [utcDate, utcHourStr] = utcKey.split('_');
-                const utcHour = parseInt(utcHourStr);
-                const local = utcToLocal(utcDate, utcHour);
-                if (local.date_local === localDateStr) {
-                    const localKey = local.hour_local;
-                    if (!localSlots[localKey]) localSlots[localKey] = [];
-                    localSlots[localKey] = localSlots[localKey].concat(people);
+        function zonedTimeToUTC(dateStr, hour, minute, tz) {
+            const approx = new Date(`${dateStr}T${String(hour).padStart(2,'0')}:${String(minute).padStart(2,'0')}:00Z`);
+            for (let offsetMinutes = -14 * 60; offsetMinutes <= 14 * 60; offsetMinutes += 30) {
+                const candidateUTC = new Date(approx.getTime() + offsetMinutes * 60000);
+                const local = getZonedParts(candidateUTC, tz);
+                if (local.date === dateStr && local.hour === hour && local.minute === minute) {
+                    return {
+                        date_utc: candidateUTC.toISOString().slice(0, 10),
+                        hour_utc: candidateUTC.getUTCHours()
+                    };
                 }
             }
-            return localSlots;
+            return { date_utc: dateStr, hour_utc: hour };
+        }
+
+        function standardSlotToUTC(standardDateStr, standardHour) {
+            return zonedTimeToUTC(standardDateStr, standardHour, 0, STANDARD_TIMEZONE);
+        }
+
+        function getStandardNow() {
+            return getZonedParts(new Date(), STANDARD_TIMEZONE);
+        }
+
+        function getPeopleForStandardSlot(standardDateStr, standardHour) {
+            const utc = standardSlotToUTC(standardDateStr, standardHour);
+            return slotsCache[`${utc.date_utc}_${utc.hour_utc}`] || [];
+        }
+
+        function formatTimeInTimezone(date, tz) {
+            return date.toLocaleTimeString('en-US', {
+                timeZone: tz,
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+            });
+        }
+
+        function formatStandardSlotRange(standardDateStr, standardHour) {
+            const tz = getUserTimezone();
+            const utc = standardSlotToUTC(standardDateStr, standardHour);
+            const start = new Date(`${utc.date_utc}T${String(utc.hour_utc).padStart(2,'0')}:00:00Z`);
+            const end = new Date(start.getTime() + 60 * 60000);
+            return `${formatTimeInTimezone(start, tz)} - ${formatTimeInTimezone(end, tz)}`;
         }
 
         function getInitials() { return localStorage.getItem('userInitials') || ''; }
@@ -742,19 +764,7 @@
         }
 
         function getLocalNow() {
-            const tz = getUserTimezone();
-            const now = new Date();
-            const parts = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: 'numeric', hour12: false, minute: 'numeric' }).formatToParts(now);
-            let year, month, day, hour, minute;
-            parts.forEach(p => {
-                if (p.type === 'year') year = p.value;
-                if (p.type === 'month') month = p.value;
-                if (p.type === 'day') day = p.value;
-                if (p.type === 'hour') hour = parseInt(p.value);
-                if (p.type === 'minute') minute = parseInt(p.value);
-            });
-            if (hour === 24) hour = 0;
-            return { date: `${year}-${month}-${day}`, hour, minute };
+            return getStandardNow();
         }
 
         function getDayName(dateStr) { return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' }); }
@@ -825,31 +835,17 @@
             const d = new Date(localDateStr + 'T12:00:00');
             const headerText = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
             const tz = getUserTimezone();
-            const refDate = new Date(`${localDateStr}T12:00:00Z`);
-            const phoenixStr = refDate.toLocaleString('en-US', { timeZone: 'America/Phoenix', hour: 'numeric', minute: 'numeric', hour12: false });
-            const userStr = refDate.toLocaleString('en-US', { timeZone: tz, hour: 'numeric', minute: 'numeric', hour12: false });
-            const phoenixMin = parseInt(phoenixStr.split(':')[1]) || 0;
-            const userMin = parseInt(userStr.split(':')[1]) || 0;
-            const startMinute = (userMin - phoenixMin + 60) % 60;
 
             let html = `<div class="schedule-header"><span>${headerText}</span><button class="btn-apply-week" id="btn-apply-week">Apply to whole week</button><button class="btn-undo-week" id="btn-undo-week">Undo week</button><button class="btn-clear-day" id="btn-clear-day">Clear day</button></div>`;
-            html += `<div class="schedule-tz-note">Times shown in: ${tz}${startMinute > 0 ? ' (slots start at :' + String(startMinute).padStart(2,'0') + ')' : ''}</div>`;
+            html += `<div class="schedule-tz-note">Arizona time is the standard. Times shown in: ${tz}</div>`;
             html += `<div class="hours-grid">`;
 
-            const localSlots = getLocalSlotsForDate(localDateStr);
             const peopleSummary = {};
             const userInitials = getInitials();
-            const minStr = String(startMinute).padStart(2, '0');
-
-            function formatSlotTime(hour) {
-                const hour12 = hour === 0 ? 12 : (hour > 12 ? hour - 12 : hour);
-                const ampm = hour < 12 ? 'AM' : 'PM';
-                return `${hour12}:${minStr} ${ampm}`;
-            }
 
             for (let h = 0; h < 24; h++) {
-                const label = `${formatSlotTime(h)} - ${formatSlotTime((h + 1) % 24)}`;
-                const people = localSlots[h] || [];
+                const label = formatStandardSlotRange(localDateStr, h);
+                const people = getPeopleForStandardSlot(localDateStr, h);
                 const isSelected = people.some(p => p.initials === userInitials);
                 const pastHour = isHourPast(localDateStr, h);
 
@@ -870,7 +866,7 @@
 
                 const contentHtml = badges.length > 0 ? `<div class="badges">${badges}</div>` : `<div class="empty-hint">No one</div>`;
 
-                html += `<button class="${classes.join(' ')}" data-hour="${h}" data-local-date="${localDateStr}" ${pastHour ? 'disabled' : ''}><div class="hour-label">${label}</div>${contentHtml}</button>`;
+                html += `<button class="${classes.join(' ')}" data-hour="${h}" data-standard-date="${localDateStr}" ${pastHour ? 'disabled' : ''}><div class="hour-label">${label}</div>${contentHtml}</button>`;
             }
 
             html += `</div>`;
@@ -887,15 +883,15 @@
             panel.innerHTML = html;
 
             panel.querySelectorAll('.hour-btn:not(:disabled)').forEach(btn => {
-                btn.addEventListener('click', () => toggleSlot(btn.dataset.hour, btn.dataset.localDate));
+                btn.addEventListener('click', () => toggleSlot(btn.dataset.hour, btn.dataset.standardDate));
             });
 
             const clearBtn = document.getElementById('btn-clear-day');
             if (clearBtn) clearBtn.addEventListener('click', () => clearDay(localDateStr));
         }
 
-        function toggleSlot(hour, localDateStr) {
-            const utc = localToUTC(localDateStr, parseInt(hour));
+        function toggleSlot(hour, standardDateStr) {
+            const utc = standardSlotToUTC(standardDateStr, parseInt(hour));
             fetch('/api/slots', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -905,7 +901,7 @@
                     initials: getInitials(),
                     name: getUserName()
                 })
-            }).then(res => res.json()).then(data => { fetchSlots(localDateStr); }).catch(err => console.error('Toggle slot error:', err));
+            }).then(res => res.json()).then(data => { fetchSlots(standardDateStr); }).catch(err => console.error('Toggle slot error:', err));
         }
 
         function registerTimezone(initials, name, tz) {
@@ -916,14 +912,13 @@
             }).catch(err => console.error('Register timezone error:', err));
         }
 
-        function clearDay(localDateStr) {
-            if (!confirm('Clear all your availability for this day?')) return;
-            const localSlots = getLocalSlotsForDate(localDateStr);
+        function clearDay(standardDateStr) {
+            if (!confirm('Clear all your availability for this Arizona day?')) return;
             const userInitials = getInitials();
-            Object.entries(localSlots).forEach(([hour, people]) => {
+            for (let h = 0; h < 24; h++) {
+                const people = getPeopleForStandardSlot(standardDateStr, h);
                 if (people.some(p => p.initials === userInitials)) {
-                    const h = parseInt(hour);
-                    const utc = localToUTC(localDateStr, h);
+                    const utc = standardSlotToUTC(standardDateStr, h);
                     fetch('/api/slots', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -935,8 +930,8 @@
                         })
                     }).catch(err => console.error('Clear day error:', err));
                 }
-            });
-            setTimeout(() => fetchSlots(localDateStr), 500);
+            }
+            setTimeout(() => fetchSlots(standardDateStr), 500);
         }
 
         socket.on('connect', () => {
