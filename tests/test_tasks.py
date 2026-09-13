@@ -57,6 +57,16 @@ class TaskBoardTests(unittest.TestCase):
         self.assertEqual(self.tasks(), [])
         self.assertEqual(set(self.visitor.get('/api/tasks').json['users']), {'AA', 'BB', 'CR'})
 
+    def test_dedicated_auth_page_and_signup_uses_shared_flow(self):
+        response = self.visitor.get('/auth?mode=signup&next=/tasks')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'Create account', response.data)
+        response = self.send(self.visitor, '/register', initials='DD', name='Diana', password='a-long-password',
+                             security_answer='nickname')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.visitor.get('/api/auth/security-question?initials=DD').json['question'],
+                         'What is your nickname?')
+
     def test_arizona_deadline_to_utc_and_india(self):
         task = self.create()
         self.assertEqual(task['deadline'], '2026-09-15T15:00:00+00:00')

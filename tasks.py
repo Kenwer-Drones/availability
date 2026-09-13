@@ -208,6 +208,10 @@ def register_tasks(app, socketio, get_db, postgres=False):
     def page():
         return render_template('tasks.html')
 
+    @bp.get('/auth')
+    def auth_page():
+        return render_template('auth.html')
+
     @bp.get('/api/tasks/session')
     @bp.get('/api/auth/session')
     def session_info():

@@ -955,12 +955,7 @@
             } catch (err) {
                 document.getElementById('setup-error').textContent = 'Unable to connect. Please try again.';
             }
-            setAvailabilityAuthMode(false);
-            document.getElementById('setup-overlay').style.display = 'flex';
-            const setupTz = document.getElementById('setup-tz');
-            const detectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone || STANDARD_TIMEZONE;
-            populateTimezoneSelect(setupTz, detectedTz);
-            document.getElementById('setup-password').focus();
+            window.location.href = '/auth?next=/';
             return false;
         }
 
@@ -990,7 +985,7 @@
             if (!initials || initials.length < 2 || initials.length > 3) { errorEl.textContent = 'Enter 2 or 3 letters for your initials.'; return; }
             if (availabilityRegisterMode && !name) { errorEl.textContent = 'Please enter your name.'; return; }
             if (!password || (availabilityRegisterMode && password.length < 10)) { errorEl.textContent = availabilityRegisterMode ? 'Use a password of at least 10 characters.' : 'Enter your password.'; return; }
-            if (availabilityRegisterMode && (!securityQuestion || !securityAnswer)) { errorEl.textContent = 'Add a recovery question and answer.'; return; }
+            if (availabilityRegisterMode && !securityAnswer) { errorEl.textContent = 'Enter your nickname for password recovery.'; return; }
             const button = document.getElementById('setup-confirm');
             button.disabled = true;
             errorEl.textContent = '';
@@ -1002,7 +997,7 @@
                     });
                     const resetData = await resetResponse.json();
                     if (!resetResponse.ok) throw new Error(resetData.error || 'Unable to reset password.');
-                    location.reload();
+                    location.href = '/auth?mode=login&next=/';
                     return;
                 }
                 const response = await fetch(`/api/auth/${availabilityRegisterMode ? 'register' : 'login'}`, {

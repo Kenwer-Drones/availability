@@ -84,6 +84,7 @@ async function refresh() {
         render();
     } catch (error) {
         if (sequence !== refreshSequence) return;
+        if (/401|sign in/i.test(error.message)) { window.location.href = '/auth?next=/tasks'; return; }
         notice(error.message, true);
         $('board').setAttribute('aria-busy', 'false');
         $('board-count').textContent = 'Unable to refresh tasks';
@@ -406,7 +407,7 @@ function renderPeople() {
     });
 }
 $('account-button').onclick = async () => {
-    if (!boardState.user) { openAccount(); return; }
+    if (!boardState.user) { window.location.href = '/auth?next=/tasks'; return; }
     try { await api('/logout', 'POST', {}); await refresh(); } catch (error) { notice(error.message); }
 };
 $('login-tab').onclick = () => setAuthMode(false);
