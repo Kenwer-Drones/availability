@@ -8,9 +8,8 @@ let deleting = null;
 let registering = false;
 let busy = false;
 let refreshSequence = 0;
+let draggedTaskId = null;
 const icons = {
-    up: '<path d="m6 9 6-6 6 6M12 3v18"/>',
-    down: '<path d="m6 15 6 6 6-6M12 21V3"/>',
     edit: '<path d="m16 3 5 5-12 12-6 1 1-6Z M14 5l5 5"/>',
     trash: '<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/>',
     calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/>',
@@ -145,6 +144,47 @@ function render() {
 function taskCard(task) {
     const card = element('article', `task-card${task.completed ? ' completed' : ''}`);
     card.dataset.taskId = task.id;
+    card.draggable = !task.completed && !!boardState.user;
+    if (card.draggable) {
+        card.title = 'Drag to reorder within this deadline';
+        card.addEventListener('dragstart', event => {
+            if (busy) { event.preventDefault(); return; }
+            card.classList.add('dragging');
+            draggedTaskId = task.id;
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData('text/plain', task.id);
+        });
+        card.addEventListener('dragend', () => {
+            card.classList.remove('dragging');
+            draggedTaskId = null;
+            document.querySelectorAll('.drop-before, .drop-after, .drop-invalid').forEach(el => el.classList.remove('drop-before', 'drop-after', 'drop-invalid'));
+        });
+        card.addEventListener('dragover', event => {
+            event.preventDefault();
+            const sourceId = draggedTaskId || event.dataTransfer.getData('text/plain');
+            const source = boardState.tasks.find(item => item.id === sourceId);
+            const valid = source && source.id !== task.id && source.assignee === task.assignee && source.deadline === task.deadline;
+            card.classList.toggle('drop-invalid', !valid);
+            card.classList.toggle('drop-before', valid && event.offsetY < card.offsetHeight / 2);
+            card.classList.toggle('drop-after', valid && event.offsetY >= card.offsetHeight / 2);
+            event.dataTransfer.dropEffect = valid ? 'move' : 'none';
+        });
+        card.addEventListener('dragleave', () => card.classList.remove('drop-before', 'drop-after', 'drop-invalid'));
+        card.addEventListener('drop', event => {
+            event.preventDefault();
+            const sourceId = draggedTaskId || event.dataTransfer.getData('text/plain');
+            const source = boardState.tasks.find(item => item.id === sourceId);
+            if (!source || source.id === task.id || source.assignee !== task.assignee || source.deadline !== task.deadline) {
+                notice('Tasks can be reordered only within the same assignee and deadline.');
+                return;
+            }
+            mutate(`/${source.id}/move`, 'POST', {
+                version: source.version,
+                target_id: task.id,
+                after: event.offsetY >= card.offsetHeight / 2
+            });
+        });
+    }
     const top = element('div', 'task-top');
     const checkbox = element('input', 'completion');
     checkbox.type = 'checkbox';
@@ -167,12 +207,7 @@ function taskCard(task) {
     card.append(meta);
     const footer = element('div', 'task-footer');
     const order = element('div', 'task-tools');
-    const peers = boardState.tasks.filter(t => !t.completed && t.assignee === task.assignee && t.deadline === task.deadline);
-    const index = peers.findIndex(t => t.id === task.id);
-    if (!task.completed) {
-        order.append(tool('up', 'Move up within this deadline', () => mutate(`/${task.id}/move`, 'POST', { version: task.version, direction: 'up' }), !boardState.user || index <= 0));
-        order.append(tool('down', 'Move down within this deadline', () => mutate(`/${task.id}/move`, 'POST', { version: task.version, direction: 'down' }), !boardState.user || index === peers.length - 1));
-    }
+    if (!task.completed) order.append(element('span', 'drag-hint', 'Drag to reorder'));
     const actions = element('div', 'task-tools');
     if (!task.completed) actions.append(tool('edit', 'Edit task', () => openTask(task), !boardState.user));
     if (boardState.user && [task.assignee, task.created_by].includes(boardState.user)) actions.append(tool('trash', 'Delete task', () => {

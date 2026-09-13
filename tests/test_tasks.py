@@ -102,6 +102,18 @@ class TaskBoardTests(unittest.TestCase):
         self.assertEqual(self.send(self.bob, f"/{second['id']}/move", version=2, direction='up').status_code, 409)
         self.assertEqual(self.send(self.bob, f"/{first['id']}/move", version=1, direction='up').status_code, 409)
 
+    def test_drag_target_can_place_task_at_arbitrary_position(self):
+        first = self.create(title='First')
+        middle = self.create(title='Middle')
+        last = self.create(title='Last')
+        response = self.send(self.bob, f"/{last['id']}/move", target_id=first['id'], after=False, version=1)
+        self.assertEqual(response.status_code, 200, response.json)
+        self.assertEqual([t['title'] for t in self.tasks() if t['assignee'] == 'BB'], ['Last', 'First', 'Middle'])
+        latest = next(t for t in self.tasks() if t['id'] == first['id'])
+        response = self.send(self.bob, f"/{latest['id']}/move", target_id=middle['id'], after=True, version=latest['version'])
+        self.assertEqual(response.status_code, 200, response.json)
+        self.assertEqual([t['title'] for t in self.tasks() if t['assignee'] == 'BB'], ['Last', 'Middle', 'First'])
+
     def test_no_deadline_priority_and_dates_sort_first(self):
         self.create(title='No date A', deadline=None)
         b = self.create(title='No date B', deadline=None)

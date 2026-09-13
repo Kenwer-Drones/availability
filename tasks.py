@@ -330,8 +330,10 @@ def register_tasks(app, socketio, get_db, postgres=False):
     @authenticated
     def move(task_id):
         data = payload()
-        if data.get('direction') not in ('up', 'down'):
-            abort(400, description='Choose up or down.')
+        direction = data.get('direction')
+        target_id = data.get('target_id')
+        if direction not in ('up', 'down') and (not isinstance(target_id, str) or not target_id):
+            abort(400, description='Choose a task to place this task around.')
         with database(write=True) as run:
             task = load_task(run, task_id, data)
             if task['completed']:
@@ -340,12 +342,23 @@ def register_tasks(app, socketio, get_db, postgres=False):
                           WHERE completed=0 ORDER BY position, id''').fetchall()
             peers = [r for r in rows if r['assignee'] == task['assignee'] and r['deadline'] == task['deadline']]
             index = next(i for i, r in enumerate(peers) if r['id'] == task_id)
-            target = index + (-1 if data['direction'] == 'up' else 1)
-            if target < 0 or target >= len(peers):
-                abort(409, description='No task in that direction with the same deadline.')
-            other = peers[target]
-            run('UPDATE tasks SET position=?, version=version+1 WHERE id=?', (other['position'], task_id))
-            run('UPDATE tasks SET position=?, version=version+1 WHERE id=?', (task['position'], other['id']))
+            if target_id:
+                target = next((i for i, r in enumerate(peers) if r['id'] == target_id), None)
+                if target is None or target_id == task_id:
+                    abort(409, description='Drop tasks only within the same assignee and deadline group.')
+                insert_at = target + (1 if data.get('after') is True else 0)
+                moving = peers.pop(index)
+                if index < insert_at:
+                    insert_at -= 1
+                peers.insert(max(0, min(insert_at, len(peers))), moving)
+            else:
+                target = index + (-1 if direction == 'up' else 1)
+                if target < 0 or target >= len(peers):
+                    abort(409, description='No task in that direction with the same deadline.')
+                moving = peers.pop(index)
+                peers.insert(target, moving)
+            for priority, peer in enumerate(peers):
+                run('UPDATE tasks SET position=?, version=version+1 WHERE id=?', ((priority + 1) * 10, peer['id']))
         return changed()
 
     @bp.delete('/api/tasks/<task_id>')

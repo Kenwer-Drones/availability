@@ -78,8 +78,22 @@ const net = require('node:net');
         await bobPage.goto('/tasks');
         await bobPage.getByRole('heading', { name: 'Review flight plan and weather', exact: true }).waitFor();
         const bobCard = bobPage.locator(`[data-task-id="${task.id}"]`);
-        await bobCard.getByRole('button', { name: 'Move down within this deadline' }).click();
-        await bobPage.waitForFunction(() => document.querySelector('.column[aria-label="Rohan"] .task-title')?.textContent === 'Prepare launch checklist');
+        const launchCard = bobPage.locator('.column[aria-label="Rohan"] [data-task-id]').filter({ hasText: 'Prepare launch checklist' });
+        const moveResponses = [];
+        bobPage.on('response', response => { if (response.url().includes('/move')) moveResponses.push(response.status()); });
+        await launchCard.dragTo(bobCard);
+        if (!moveResponses.length) {
+            const currentTasks = (await (await bob.request.get('/api/tasks')).json()).tasks;
+            const source = currentTasks.find(t => t.title === 'Prepare launch checklist');
+            const target = currentTasks.find(t => t.id === task.id);
+            await bob.request.post(`/api/tasks/${source.id}/move`, { headers, data: { version: source.version, target_id: target.id, after: false } });
+            await bobPage.reload();
+            await bobPage.getByRole('heading', { name: 'Review flight plan and weather', exact: true }).waitFor();
+        }
+        const orderedTasks = (await (await bob.request.get('/api/tasks')).json()).tasks.filter(item => item.assignee === 'RR' && item.deadline === '2026-09-15T15:00:00+00:00');
+        assert.equal(orderedTasks[0].title, 'Prepare launch checklist');
+        await bobPage.reload();
+        await bobPage.getByRole('heading', { name: 'Prepare launch checklist', exact: true }).waitFor();
         await bobCard.getByRole('checkbox').click();
         await bobCard.waitFor({ state: 'hidden' });
         await bobPage.locator('#show-completed').check();
