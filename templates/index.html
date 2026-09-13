@@ -341,8 +341,9 @@
         }
 
         .hour-btn.selected {
-            background: #e8f5e9;
-            border-color: #4caf50;
+            background: var(--hour-bg, #e8f5e9);
+            border-color: var(--hour-border, #4caf50);
+            color: var(--hour-text, #333);
         }
 
         .hour-btn.past-hour {
@@ -961,7 +962,8 @@
 
                 const contentHtml = badges.length > 0 ? `<div class="badges">${badges}</div>` : `<div class="empty-hint">No one</div>`;
 
-                html += `<button class="${classes.join(' ')}" data-hour="${h}" data-standard-date="${localDateStr}" ${pastHour ? 'disabled' : ''}><div class="hour-label">${label}</div>${contentHtml}</button>`;
+                const hourStyle = isSelected ? ` style="${getColorStyleVars(userInitials, 'hour')}"` : '';
+                html += `<button class="${classes.join(' ')}" data-hour="${h}" data-standard-date="${localDateStr}"${hourStyle} ${pastHour ? 'disabled' : ''}><div class="hour-label">${label}</div>${contentHtml}</button>`;
             }
 
             html += `</div>`;
