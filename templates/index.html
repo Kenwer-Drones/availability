@@ -76,24 +76,17 @@
 
         .user-setup select {
             padding: 4px 8px;
-            border: 1px solid var(--current-user-border, #ccc);
+            border: 1px solid #ccc;
             border-radius: 4px;
-            background: var(--current-user-bg, #fff);
-            color: var(--current-user-text, #333);
+            background: #fff;
+            color: #333;
             font-size: 12px;
-            font-weight: 600;
         }
 
-        .user-setup select option:checked,
-        .setup-box select option:checked {
-            background: linear-gradient(var(--current-user-bg, #e8f0fe), var(--current-user-bg, #e8f0fe));
-            color: var(--current-user-text, #1a4f9c);
-            font-weight: 700;
-        }
-
-        .user-setup select option.tz-active {
-            background: var(--current-user-bg, #e8f0fe);
-            color: var(--current-user-text, #1a4f9c);
+        .user-setup select option.tz-active,
+        .setup-box select option.tz-active {
+            background: var(--tz-option-bg, #e8f0fe);
+            color: var(--tz-option-text, #1a4f9c);
             font-weight: 700;
         }
 
@@ -606,28 +599,17 @@
             return `--${prefix}-bg:${color.bg}; --${prefix}-text:${color.text}; --${prefix}-border:${color.border};`;
         }
 
+        function getFirstUserForTimezone(timezone) {
+            return Object.entries(timezonesCache)
+                .filter(([initials, info]) => info && info.timezone === timezone)
+                .sort(([a], [b]) => a.localeCompare(b))[0] || null;
+        }
+
         function setCurrentUserColorVars() {
-            const selectedTz = getUserTimezone();
-            const matchingTimezoneUsers = Object.entries(timezonesCache)
-                .filter(([initials, info]) => info && info.timezone === selectedTz)
-                .sort(([a], [b]) => a.localeCompare(b));
-
-            if (matchingTimezoneUsers.length > 0) {
-                const [initials, info] = matchingTimezoneUsers[0];
-                const color = getColorForUser(initials, info.name || '');
-                document.documentElement.style.setProperty('--current-user-bg', color.bg);
-                document.documentElement.style.setProperty('--current-user-text', color.text);
-                document.documentElement.style.setProperty('--current-user-border', color.border);
-                return;
-            }
-
             const initials = getInitials();
             const name = getUserName();
             if (!initials) return;
-            const color = getColorForUser(initials, name);
-            document.documentElement.style.setProperty('--current-user-bg', color.bg);
-            document.documentElement.style.setProperty('--current-user-text', color.text);
-            document.documentElement.style.setProperty('--current-user-border', color.border);
+            getColorForUser(initials, name);
         }
 
         function assignColorsFromCache() {
@@ -814,7 +796,22 @@
         }
 
         function populateTimezoneSelect(selectEl, selectedValue) {
-            selectEl.innerHTML = TIMEZONES.map(tz => `<option value="${tz.value}" class="${tz.value === selectedValue ? 'tz-active' : ''}" ${tz.value === selectedValue ? 'selected' : ''}>${tz.label}</option>`).join('');
+            selectEl.innerHTML = TIMEZONES.map(tz => {
+                const timezoneUser = getFirstUserForTimezone(tz.value);
+                const selectedAttr = tz.value === selectedValue ? 'selected' : '';
+                if (!timezoneUser) {
+                    return `<option value="${tz.value}" ${selectedAttr}>${tz.label}</option>`;
+                }
+                const [initials, info] = timezoneUser;
+                const color = getColorForUser(initials, info.name || '');
+                return `<option value="${tz.value}" class="tz-active" style="--tz-option-bg:${color.bg}; --tz-option-text:${color.text}; background:${color.bg}; color:${color.text}; font-weight:700;" ${selectedAttr}>${tz.label}</option>`;
+            }).join('');
+        }
+
+        function refreshTimezoneSelects() {
+            populateTimezoneSelect(tzSelect, getUserTimezone());
+            const setupTz = document.getElementById('setup-tz');
+            if (setupTz) populateTimezoneSelect(setupTz, setupTz.value || getUserTimezone());
         }
 
         function renderTimezoneTeam() {
@@ -838,6 +835,7 @@
                 timezonesCache = await res.json();
                 assignColorsFromCache();
                 setCurrentUserColorVars();
+                refreshTimezoneSelects();
                 renderTimezoneTeam();
                 if (currentDate) renderSchedule(currentDate);
             } catch (err) {
@@ -874,6 +872,7 @@
             tzSelect.value = tz;
             timezonesCache[initials] = { timezone: tz, name };
             assignColorsFromCache();
+            refreshTimezoneSelects();
             renderTimezoneTeam();
             registerTimezone(initials, name, tz);
             renderDatesPanel();
@@ -889,6 +888,7 @@
                 timezonesCache[getInitials()] = { timezone: tzSelect.value, name: getUserName() };
                 assignColorsFromCache();
                 setCurrentUserColorVars();
+                refreshTimezoneSelects();
                 renderTimezoneTeam();
                 registerTimezone(getInitials(), getUserName(), tzSelect.value);
             }
@@ -1238,6 +1238,7 @@
             timezonesCache = timezones || {};
             assignColorsFromCache();
             setCurrentUserColorVars();
+            refreshTimezoneSelects();
             renderTimezoneTeam();
             if (currentDate) renderSchedule(currentDate);
         });
