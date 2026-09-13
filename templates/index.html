@@ -1010,11 +1010,29 @@
 
             html += `</div>`;
 
-            if (Object.keys(peopleSummary).length > 0) {
+            const registeredUsers = {};
+            Object.entries(timezonesCache).forEach(([initials, info]) => {
+                registeredUsers[initials] = {
+                    name: info.name || initials,
+                    timezone: info.timezone || '',
+                    count: 0
+                };
+            });
+            Object.entries(peopleSummary).forEach(([initials, info]) => {
+                registeredUsers[initials] = {
+                    ...registeredUsers[initials],
+                    name: info.name || registeredUsers[initials]?.name || initials,
+                    count: info.count
+                };
+            });
+
+            const summaryInitials = Object.keys(registeredUsers).sort();
+            if (summaryInitials.length > 0) {
                 html += `<div class="summary-section"><div class="summary-title">Availability Summary</div>`;
-                Object.keys(peopleSummary).sort().forEach(initials => {
-                    const info = peopleSummary[initials];
-                    html += `<div class="summary-person"><div class="summary-person-name">${info.name} (${initials})</div><div class="summary-person-hours">${info.count} / 7 hours</div></div>`;
+                summaryInitials.forEach(initials => {
+                    const info = registeredUsers[initials];
+                    const timezoneLabel = info.timezone ? ` <span style="color:#888; font-weight:400;">- ${getTimezoneLabel(info.timezone)}</span>` : '';
+                    html += `<div class="summary-person"><div class="summary-person-name" style="${getColorStyleVars(initials, 'summary', info.name)} color:var(--summary-text);">${info.name} (${initials})${timezoneLabel}</div><div class="summary-person-hours">${info.count || 0} / 7 hours</div></div>`;
                 });
                 html += `</div>`;
             }
