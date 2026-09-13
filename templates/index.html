@@ -46,6 +46,10 @@
             flex-shrink: 0;
         }
 
+        .page-nav { display: flex; gap: 12px; font-size: 13px; }
+        .page-nav a { color: #3367d6; text-decoration: none; padding: 6px 0; }
+        .page-nav a[aria-current] { font-weight: 600; border-bottom: 2px solid #3367d6; }
+
         .user-setup {
             display: flex;
             align-items: center;
@@ -518,6 +522,7 @@
 <body>
     <header>
         <h1><img src="/static/icon.png" alt="logo" style="width:26px; height:26px;">Team Availability</h1>
+        <nav class="page-nav" aria-label="Pages"><a href="/" aria-current="page">Availability</a><a href="/tasks">Tasks</a></nav>
         <div class="user-setup">
             <span id="user-display" style="font-size:13px; color:#333;"></span>
             <label for="tz-select">Timezone:</label>

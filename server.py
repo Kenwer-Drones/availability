@@ -136,8 +136,9 @@ except Exception as _e:
     print("init_db() failed at startup, will retry lazily:", _e)
     traceback.print_exc()
 
-# In-memory store for user timezones (persists via API)
-user_timezones = {}  # { initials: timezone }
+from tasks import register_tasks
+
+get_user_directory, save_user_profile = register_tasks(app, socketio, get_db, bool(DATABASE_URL))
 
 
 @app.route('/')
@@ -186,7 +187,7 @@ def debug():
 @app.route('/api/timezones', methods=['GET'])
 def get_timezones():
     """Get all registered user timezones."""
-    return jsonify(user_timezones)
+    return jsonify(get_user_directory())
 
 
 @app.route('/api/timezones', methods=['POST'])
@@ -200,10 +201,10 @@ def set_timezone():
     if not initials or not timezone:
         return jsonify({'error': 'Missing initials or timezone'}), 400
 
-    user_timezones[initials] = {'timezone': timezone, 'name': name}
+    save_user_profile(initials, name, timezone)
 
     # Broadcast timezone update to all clients
-    socketio.emit('tz_update', user_timezones)
+    socketio.emit('tz_update', get_user_directory())
 
     return jsonify({'status': 'ok'})
 

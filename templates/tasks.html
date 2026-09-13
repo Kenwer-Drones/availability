@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Tasks | Kenwer Drones</title>
+    <link rel="icon" href="/static/icon.png">
+    <link rel="stylesheet" href="/static/tasks.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js" defer></script>
+    <script src="/static/tasks.js" defer></script>
+</head>
+<body>
+    <header class="site-header">
+        <a class="brand" href="/"><img src="/static/icon.png" alt="" width="26" height="26">Kenwer Drones</a>
+        <nav aria-label="Pages"><a href="/">Availability</a><a href="/tasks" aria-current="page">Tasks</a></nav>
+        <div class="account"><span id="account-name"></span><button id="account-button">Sign in</button></div>
+    </header>
+    <main>
+        <div class="board-heading"><div><h1>Team assignments</h1><p id="board-count">Loading tasks...</p></div>
+            <button class="primary" id="add-task"><span aria-hidden="true">+</span> Add task</button>
+        </div>
+        <div class="toolbar">
+            <label class="search"><span class="sr-only">Search tasks</span><input id="search" type="search" placeholder="Search tasks"></label>
+            <label class="completed-filter"><input id="show-completed" type="checkbox">Show completed</label>
+            <span class="timezone">Deadlines: Arizona (MST, UTC-7)</span>
+            <span id="connection" role="status">Connecting...</span>
+        </div>
+        <div class="notice" id="notice" role="status" hidden><span id="notice-text"></span><button id="retry">Retry</button></div>
+        <div id="board" class="board" aria-label="Tasks by assignee" aria-busy="true"></div>
+    </main>
+
+    <dialog id="account-dialog" aria-labelledby="account-title">
+        <form id="account-form">
+            <div class="dialog-heading"><h2 id="account-title">Sign in to tasks</h2><button type="button" class="icon-button close-dialog" title="Close" aria-label="Close">&times;</button></div>
+            <div class="auth-tabs" role="group" aria-label="Account action"><button type="button" id="login-tab" aria-pressed="true">Sign in</button><button type="button" id="register-tab" aria-pressed="false">Create account</button></div>
+            <label>Initials<input id="auth-initials" name="username" autocomplete="username" required pattern="[A-Za-z]{2,3}" minlength="2" maxlength="3"></label>
+            <label id="name-field" hidden>Your name<input id="auth-name" name="name" autocomplete="name" maxlength="60"></label>
+            <label>Password<input id="auth-password" name="password" type="password" autocomplete="current-password" required maxlength="256"></label>
+            <p id="register-note" class="muted" hidden>Use your availability initials and a password of at least 10 characters. Each profile can create its task account once.</p>
+            <p class="form-error" id="auth-error" role="alert"></p>
+            <div class="dialog-actions"><button type="button" class="close-dialog">Cancel</button><button class="primary" id="auth-submit">Sign in</button></div>
+        </form>
+    </dialog>
+
+    <dialog id="task-dialog" aria-labelledby="task-dialog-title">
+        <form id="task-form">
+            <div class="dialog-heading"><h2 id="task-dialog-title">Add task</h2><button type="button" class="icon-button close-dialog" title="Close" aria-label="Close">&times;</button></div>
+            <label>Title<textarea id="task-title" required maxlength="300" rows="3" placeholder="What needs to be done?"></textarea></label>
+            <label>Assigned to<select id="task-assignee"></select></label>
+            <p id="assignee-note" class="muted" hidden>Only the current assignee can reassign this task.</p>
+            <label>Deadline <span class="muted">(Arizona time)</span><input type="datetime-local" id="task-deadline" min="1900-01-01T00:00" max="9998-12-31T23:59"></label>
+            <p id="deadline-preview" class="muted"></p>
+            <p class="form-error" id="task-error" role="alert"></p>
+            <div class="dialog-actions"><button type="button" class="close-dialog">Cancel</button><button class="primary" id="task-submit">Add task</button></div>
+        </form>
+    </dialog>
+
+    <dialog id="delete-dialog" aria-labelledby="delete-title">
+        <form id="delete-form"><h2 id="delete-title">Delete task?</h2><p id="delete-name"></p><p class="form-error" id="delete-error" role="alert"></p>
+            <div class="dialog-actions"><button type="button" class="close-dialog">Cancel</button><button class="danger">Delete task</button></div>
+        </form>
+    </dialog>
+</body>
+</html>

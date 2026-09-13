@@ -1,0 +1,85 @@
+* { box-sizing: border-box; }
+body { margin: 0; font: 14px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #303238; background: #fff; }
+button, input, select, textarea { font: inherit; }
+button, input, select, textarea { border: 1px solid #d9dce1; border-radius: 5px; background: #fff; color: inherit; }
+button { cursor: pointer; padding: 7px 12px; }
+button:hover:not(:disabled) { background: #f1f4f9; }
+button:disabled { cursor: not-allowed; opacity: .4; }
+:focus-visible { outline: 2px solid #3367d6; outline-offset: 3px; }
+a { color: #3367d6; text-decoration: none; }
+.site-header { min-height: 64px; border-bottom: 1px solid #e5e7eb; padding: 12px 24px; display: flex; gap: 28px; align-items: center; flex-wrap: wrap; }
+.brand { color: #303238; display: flex; align-items: center; gap: 9px; font-size: 17px; font-weight: 600; }
+nav { display: flex; gap: 18px; }
+nav a { padding: 7px 0; font-size: 13px; }
+nav [aria-current] { border-bottom: 2px solid #3367d6; font-weight: 600; }
+.account { margin-left: auto; display: flex; gap: 12px; align-items: center; min-width: 0; }
+#account-name { overflow-wrap: anywhere; }
+main { padding: 28px 28px 40px; }
+.board-heading { display: flex; justify-content: space-between; gap: 16px; align-items: center; }
+h1 { font-size: 26px; line-height: 1.3; margin: 0; font-weight: 650; }
+h2 { font-size: 19px; margin: 0; }
+.board-heading p { color: #747982; margin: 5px 0 0; font-size: 13px; }
+.primary { background: #3367d6; border-color: #3367d6; color: white; font-weight: 600; }
+.primary:hover:not(:disabled) { background: #2855b6; }
+.toolbar { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin: 25px 0 22px; font-size: 12px; }
+.search input { padding: 8px 10px; width: 220px; max-width: 100%; }
+.completed-filter { display: flex; align-items: center; gap: 6px; }
+.timezone { margin-left: auto; color: #666c75; }
+#connection { color: #747982; font-size: 11px; }
+.board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(280px, 1fr); gap: 24px; overflow-x: auto; align-items: start; padding: 0 0 20px; min-height: 240px; }
+.column { min-width: 0; }
+.column-heading { display: flex; align-items: center; gap: 9px; margin-bottom: 18px; padding: 0 2px; }
+.column h2 { font-size: 15px; overflow-wrap: anywhere; }
+.column-count { color: #858a92; font-size: 13px; }
+.column-heading .icon-button { margin-left: auto; flex-shrink: 0; }
+.avatar { background: var(--user-bg, #f1f2f4); color: var(--user-text, #666); border: 1px solid var(--user-border, #ddd); width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 10px; font-weight: 600; }
+.task-card { border: 1px solid #e0e2e6; border-radius: 8px; padding: 14px; margin-bottom: 12px; box-shadow: 0 2px 4px #00000005; }
+.task-top { display: flex; align-items: flex-start; gap: 10px; }
+.completion { appearance: none; display: inline-grid; place-content: center; margin: 2px 0 0; padding: 0; width: 21px; height: 21px; border-radius: 50%; border: 1px solid #a5a9af; flex-shrink: 0; color: #28784a; cursor: pointer; }
+.completion:checked { background: #e3f3e8; border-color: #28784a; }
+.completion:checked::before { content: '\2713'; font-size: 14px; }
+.completion:disabled { opacity: .65; }
+.task-title { font-size: 15px; font-weight: 400; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; flex: 1; min-width: 0; }
+.task-card.completed .task-title { text-decoration: line-through; color: #868b93; }
+.task-meta { margin: 12px 0 0 31px; color: #747982; font-size: 12px; }
+.deadline { display: flex; gap: 5px; align-items: flex-start; }
+.deadline.overdue { color: #c03932; }
+.deadline svg { flex-shrink: 0; margin-top: 2px; }
+.task-footer { display: flex; align-items: center; justify-content: space-between; gap: 4px; margin: 10px 0 0 27px; }
+.task-tools { display: flex; gap: 2px; }
+.icon-button { padding: 4px; min-width: 28px; height: 28px; border-color: transparent; color: #7a8089; display: inline-flex; align-items: center; justify-content: center; }
+.icon-button svg { width: 15px; height: 15px; }
+.empty { color: #8c9199; font-size: 13px; padding: 14px 2px; margin: 0; }
+.add-column { border: 0; background: none; color: #737a85; font-size: 13px; }
+.notice { display: flex; gap: 12px; align-items: center; background: #fff4df; color: #704e15; border: 1px solid #f0d8a8; border-radius: 5px; padding: 8px 12px; margin-bottom: 18px; }
+.notice button { margin-left: auto; }
+dialog { border: 1px solid #d9dce1; border-radius: 8px; width: 460px; max-width: calc(100vw - 28px); padding: 24px; color: #303238; max-height: calc(100dvh - 32px); overflow-y: auto; }
+dialog::backdrop { background: #0005; }
+.dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+form > label { display: block; margin-top: 15px; font-size: 13px; font-weight: 500; }
+form input, form select, form textarea { display: block; width: 100%; padding: 9px 10px; margin-top: 5px; min-width: 0; }
+textarea { resize: vertical; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 22px; }
+.form-error { color: #ba342e; font-size: 13px; overflow-wrap: anywhere; }
+.form-error:empty { display: none; }
+.muted { color: #747982; font-size: 12px; font-weight: 400; }
+.auth-tabs { display: flex; gap: 6px; }
+.auth-tabs [aria-pressed="true"] { background: #eaf0fd; color: #2855b6; border-color: #afc4ef; }
+.danger { background: #b9342d; color: #fff; border-color: #b9342d; }
+#delete-name { overflow-wrap: anywhere; }
+[hidden] { display: none !important; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+@media (max-width: 700px) {
+    .site-header { padding: 12px 16px; gap: 12px 22px; }
+    .account { width: 100%; justify-content: flex-end; }
+    main { padding: 22px 16px; }
+    h1 { font-size: 22px; }
+    .board-heading { align-items: flex-start; }
+    #add-task { white-space: nowrap; }
+    .toolbar { gap: 12px; }
+    .search { flex: 1; min-width: 150px; }
+    .search input { width: 100%; }
+    .timezone { margin-left: 0; }
+    .board { grid-auto-flow: row; grid-template-columns: minmax(0, 1fr); grid-auto-columns: auto; gap: 28px; overflow: visible; }
+    .column-heading { margin-bottom: 12px; }
+}
