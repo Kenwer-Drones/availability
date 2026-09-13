@@ -341,9 +341,8 @@
         }
 
         .hour-btn.selected {
-            background: var(--hour-bg, #e8f5e9);
-            border-color: var(--hour-border, #4caf50);
-            color: var(--hour-text, #333);
+            background: #e8f5e9;
+            border-color: #4caf50;
         }
 
         .hour-btn.past-hour {
@@ -623,18 +622,6 @@
         function getColorStyleVars(initials, prefix = 'badge', name = '') {
             const color = getColorForUser(initials, name);
             return `--${prefix}-bg:${color.bg}; --${prefix}-text:${color.text}; --${prefix}-border:${color.border};`;
-        }
-
-        function getHourColorStyle(people) {
-            const colors = [...new Map(people.map(person => {
-                const info = timezonesCache[person.initials] || {};
-                return [person.initials, getColorForUser(person.initials, person.name || info.name || '')];
-            })).values()];
-            if (!colors.length) return '';
-            const background = colors.length === 1
-                ? colors[0].bg
-                : `linear-gradient(135deg, ${colors.map((color, index) => `${color.bg} ${index * 100 / colors.length}% ${(index + 1) * 100 / colors.length}%`).join(', ')})`;
-            return `--hour-bg:${background}; --hour-border:${colors[0].border};`;
         }
 
         function getFirstUserForTimezone(timezone) {
@@ -969,13 +956,12 @@
                 }).join('');
 
                 const classes = ['hour-btn'];
-                if (people.length > 0) classes.push('selected');
+                if (isSelected) classes.push('selected');
                 if (pastHour) classes.push('past-hour');
 
                 const contentHtml = badges.length > 0 ? `<div class="badges">${badges}</div>` : `<div class="empty-hint">No one</div>`;
 
-                const hourStyle = people.length > 0 ? ` style="${getHourColorStyle(people)}"` : '';
-                html += `<button class="${classes.join(' ')}" data-hour="${h}" data-standard-date="${localDateStr}"${hourStyle} ${pastHour ? 'disabled' : ''}><div class="hour-label">${label}</div>${contentHtml}</button>`;
+                html += `<button class="${classes.join(' ')}" data-hour="${h}" data-standard-date="${localDateStr}" ${pastHour ? 'disabled' : ''}><div class="hour-label">${label}</div>${contentHtml}</button>`;
             }
 
             html += `</div>`;
