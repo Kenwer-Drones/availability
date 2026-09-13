@@ -11,6 +11,7 @@ import time
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from flask import Blueprint, abort, g, jsonify, render_template, request
+from country_timezones import normalize_timezone, timezone_options, bundled_zone
 from werkzeug.security import check_password_hash, generate_password_hash
 
 
@@ -52,6 +53,7 @@ def register_tasks(app, socketio, get_db, postgres=False):
             run('''CREATE TABLE IF NOT EXISTS team_users (
                 initials TEXT PRIMARY KEY, name TEXT NOT NULL,
                 timezone TEXT NOT NULL DEFAULT 'America/Phoenix')''')
+            run("UPDATE team_users SET timezone='Asia/Kolkata' WHERE lower(timezone) IN ('asia/calcutta', 'asia/kolkatha')")
             run('''CREATE TABLE IF NOT EXISTS task_accounts (
                 initials TEXT PRIMARY KEY REFERENCES team_users(initials),
                 password_hash TEXT NOT NULL,
@@ -141,7 +143,7 @@ def register_tasks(app, socketio, get_db, postgres=False):
         try:
             # Deadline inputs are explicitly Arizona wall time, never browser-local.
             date = datetime.strptime(value, '%Y-%m-%dT%H:%M')
-            return date.replace(tzinfo=ZoneInfo('America/Phoenix')).astimezone(timezone.utc).isoformat(timespec='seconds')
+            return date.replace(tzinfo=bundled_zone('America/Phoenix')).astimezone(timezone.utc).isoformat(timespec='seconds')
         except (ValueError, OverflowError):
             abort(400, description='Use a valid Arizona deadline date and time.')
 
@@ -205,6 +207,10 @@ def register_tasks(app, socketio, get_db, postgres=False):
                             samesite='Lax', max_age=10 * 365 * 86400, path='/')
         return response
 
+    @app.context_processor
+    def country_timezone_context():
+        return {'timezone_options': timezone_options()}
+
     @bp.get('/tasks')
     def page():
         return render_template('tasks.html')
@@ -240,9 +246,9 @@ def register_tasks(app, socketio, get_db, postgres=False):
         security_answer = field(data, 'security_answer', 256)
         tz = field(data, 'timezone', 100, required=False) or 'America/Phoenix'
         try:
-            ZoneInfo(tz)
-        except (ZoneInfoNotFoundError, ValueError):
-            abort(400, description='Invalid timezone.')
+            tz = normalize_timezone(tz)
+        except ValueError as error:
+            abort(400, description=str(error))
         throttle(initials)
         password_hash = generate_password_hash(password)
         with database(write=True) as run:

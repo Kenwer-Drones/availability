@@ -538,7 +538,7 @@
         <nav class="page-nav" aria-label="Pages"><a href="/" aria-current="page">Availability</a><a href="/tasks">Tasks</a></nav>
         <div class="user-setup">
             <span id="user-display" style="font-size:13px; color:#333;"></span>
-            <label for="tz-select">Timezone:</label>
+            <label for="tz-select">Country / timezone:</label>
             <select id="tz-select"></select>
             <details class="timezone-team" id="timezone-team">
                 <summary id="timezone-team-summary">Team time zones</summary>
@@ -635,81 +635,7 @@
             setCurrentUserColorVars();
         }
 
-        const TIMEZONES = [
-            { value: 'Pacific/Midway', label: '(UTC-11:00) Samoa' },
-            { value: 'Pacific/Honolulu', label: '(UTC-10:00) Hawaii' },
-            { value: 'Pacific/Marquesas', label: '(UTC-09:30) Marquesas Islands' },
-            { value: 'America/Anchorage', label: '(UTC-09:00) Alaska' },
-            { value: 'America/Los_Angeles', label: '(UTC-08:00) US/Canada Pacific' },
-            { value: 'America/Phoenix', label: '(UTC-07:00) US/Phoenix (no DST)' },
-            { value: 'America/Denver', label: '(UTC-07:00) US/Canada Mountain' },
-            { value: 'America/Chicago', label: '(UTC-06:00) US/Canada Central' },
-            { value: 'America/Mexico_City', label: '(UTC-06:00) Mexico' },
-            { value: 'America/New_York', label: '(UTC-05:00) US/Canada Eastern' },
-            { value: 'America/Bogota', label: '(UTC-05:00) Colombia' },
-            { value: 'America/Lima', label: '(UTC-05:00) Peru' },
-            { value: 'America/Caracas', label: '(UTC-04:00) Venezuela' },
-            { value: 'America/Halifax', label: '(UTC-04:00) Canada Atlantic' },
-            { value: 'America/Santiago', label: '(UTC-04:00) Chile' },
-            { value: 'America/La_Paz', label: '(UTC-04:00) Bolivia' },
-            { value: 'America/St_Johns', label: '(UTC-03:30) Newfoundland' },
-            { value: 'America/Sao_Paulo', label: '(UTC-03:00) Brazil' },
-            { value: 'America/Argentina/Buenos_Aires', label: '(UTC-03:00) Argentina' },
-            { value: 'Atlantic/South_Georgia', label: '(UTC-02:00) South Georgia' },
-            { value: 'Atlantic/Azores', label: '(UTC-01:00) Azores' },
-            { value: 'Atlantic/Cape_Verde', label: '(UTC-01:00) Cape Verde' },
-            { value: 'UTC', label: '(UTC+00:00) UTC / GMT' },
-            { value: 'Europe/London', label: '(UTC+00:00) United Kingdom' },
-            { value: 'Africa/Accra', label: '(UTC+00:00) Ghana' },
-            { value: 'Africa/Lagos', label: '(UTC+01:00) Nigeria' },
-            { value: 'Europe/Paris', label: '(UTC+01:00) France' },
-            { value: 'Europe/Berlin', label: '(UTC+01:00) Germany' },
-            { value: 'Europe/Madrid', label: '(UTC+01:00) Spain' },
-            { value: 'Europe/Rome', label: '(UTC+01:00) Italy' },
-            { value: 'Europe/Amsterdam', label: '(UTC+01:00) Netherlands' },
-            { value: 'Europe/Warsaw', label: '(UTC+01:00) Poland' },
-            { value: 'Africa/Cairo', label: '(UTC+02:00) Egypt' },
-            { value: 'Africa/Johannesburg', label: '(UTC+02:00) South Africa' },
-            { value: 'Europe/Athens', label: '(UTC+02:00) Greece' },
-            { value: 'Europe/Bucharest', label: '(UTC+02:00) Romania' },
-            { value: 'Asia/Jerusalem', label: '(UTC+02:00) Israel' },
-            { value: 'Europe/Istanbul', label: '(UTC+03:00) Turkey' },
-            { value: 'Europe/Moscow', label: '(UTC+03:00) Russia (Moscow)' },
-            { value: 'Asia/Riyadh', label: '(UTC+03:00) Saudi Arabia' },
-            { value: 'Africa/Nairobi', label: '(UTC+03:00) Kenya / East Africa' },
-            { value: 'Asia/Baghdad', label: '(UTC+03:00) Iraq' },
-            { value: 'Asia/Tehran', label: '(UTC+03:30) Iran' },
-            { value: 'Asia/Dubai', label: '(UTC+04:00) UAE' },
-            { value: 'Asia/Muscat', label: '(UTC+04:00) Oman' },
-            { value: 'Asia/Baku', label: '(UTC+04:00) Azerbaijan' },
-            { value: 'Asia/Kabul', label: '(UTC+04:30) Afghanistan' },
-            { value: 'Asia/Karachi', label: '(UTC+05:00) Pakistan' },
-            { value: 'Asia/Tashkent', label: '(UTC+05:00) Uzbekistan' },
-            { value: 'Asia/Kolkata', label: '(UTC+05:30) India' },
-            { value: 'Asia/Colombo', label: '(UTC+05:30) Sri Lanka' },
-            { value: 'Asia/Kathmandu', label: '(UTC+05:45) Nepal' },
-            { value: 'Asia/Dhaka', label: '(UTC+06:00) Bangladesh' },
-            { value: 'Asia/Almaty', label: '(UTC+06:00) Kazakhstan' },
-            { value: 'Asia/Yangon', label: '(UTC+06:30) Myanmar' },
-            { value: 'Asia/Bangkok', label: '(UTC+07:00) Thailand' },
-            { value: 'Asia/Jakarta', label: '(UTC+07:00) Indonesia (West)' },
-            { value: 'Asia/Ho_Chi_Minh', label: '(UTC+07:00) Vietnam' },
-            { value: 'Asia/Shanghai', label: '(UTC+08:00) China' },
-            { value: 'Asia/Singapore', label: '(UTC+08:00) Singapore' },
-            { value: 'Asia/Kuala_Lumpur', label: '(UTC+08:00) Malaysia' },
-            { value: 'Asia/Manila', label: '(UTC+08:00) Philippines' },
-            { value: 'Asia/Taipei', label: '(UTC+08:00) Taiwan' },
-            { value: 'Australia/Perth', label: '(UTC+08:00) Australia (West)' },
-            { value: 'Asia/Tokyo', label: '(UTC+09:00) Japan' },
-            { value: 'Asia/Seoul', label: '(UTC+09:00) South Korea' },
-            { value: 'Australia/Darwin', label: '(UTC+09:30) Australia (Central)' },
-            { value: 'Australia/Sydney', label: '(UTC+10:00) Australia (East)' },
-            { value: 'Pacific/Guam', label: '(UTC+10:00) Guam' },
-            { value: 'Pacific/Noumea', label: '(UTC+11:00) New Caledonia' },
-            { value: 'Pacific/Auckland', label: '(UTC+12:00) New Zealand' },
-            { value: 'Pacific/Fiji', label: '(UTC+12:00) Fiji' },
-            { value: 'Pacific/Tongatapu', label: '(UTC+13:00) Tonga' }
-        ];
+        const TIMEZONES = {{ timezone_options | tojson }};
 
         function getUserTimezone() { return localStorage.getItem('userTimezone') || 'America/Phoenix'; }
         function setUserTimezone(tz) { localStorage.setItem('userTimezone', tz); }

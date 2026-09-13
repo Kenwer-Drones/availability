@@ -11,14 +11,15 @@ const path = require('node:path');
  });
  let browser;
  try {
-  for(let i=0;i<100;i++){try{if((await fetch('http://127.0.0.1:5098/auth')).ok)break;}catch{}await new Promise(r=>setTimeout(r,100));}
+  for(let i=0;i<100;i++){try{const response=await fetch('http://127.0.0.1:5098/auth');await response.arrayBuffer();if(response.ok)break;}catch{}await new Promise(r=>setTimeout(r,100));}
   browser=await chromium.launch({executablePath:process.env.CHROMIUM_EXECUTABLE_PATH || '/tmp/chromium',args:['--no-sandbox']});
   const context=await browser.newContext({baseURL:'http://127.0.0.1:5098',timezoneId:'Asia/Kolkata'});
   await context.route('https://cdnjs.cloudflare.com/**',r=>r.abort());
   const page=await context.newPage();page.on('dialog',d=>d.accept());const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto('/tasks');await page.waitForURL('**/auth?next=/tasks');
   await page.click('#signup-tab');await page.fill('#name','Signup Test');await page.fill('#initials','ST');await page.fill('#password','long-password-123');await page.fill('#security-answer','tester');
-  assert.ok(await page.locator('#timezone').inputValue());
+  await page.selectOption('#timezone', {label:'India — Kolkata (IST) (UTC+05:30)'});
+  assert.equal(await page.locator('#timezone').inputValue(), 'Asia/Kolkata');
   await page.click('#submit');await page.waitForURL('**/*created=1*');
   assert.match(await page.locator('#message').textContent(),/Account created/);
   assert.equal((await (await context.request.get('/api/auth/session')).json()).user,null);
@@ -29,6 +30,7 @@ const path = require('node:path');
   assert.equal((await context.request.post('/api/slots',{data:{initials:'ST',date_utc:'bad-date',hour_utc:8}})).status(),400);
   assert.equal((await context.request.post('/api/timezones',{data:{initials:'XX',timezone:'America/Phoenix'}})).status(),403);
   assert.equal((await context.request.post('/api/slots',{data:{initials:'ST',date_utc:'2026-09-20',hour_utc:8}})).status(),200);
+  assert.equal((await (await context.request.get('/api/auth/session')).json()).profile.timezone,'Asia/Kolkata');
   await page.goto('/');await page.waitForFunction(()=>document.getElementById('user-display').textContent.includes('Signup Test'));
   await page.reload();await page.waitForFunction(()=>document.getElementById('user-display').textContent.includes('Signup Test'));
   await page.click('#btn-reset-user');await page.waitForURL('**/auth?next=/');

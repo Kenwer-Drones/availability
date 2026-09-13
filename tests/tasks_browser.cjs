@@ -25,7 +25,7 @@ const net = require('node:net');
     let browser;
     try {
         for (let i = 0; i < 100; i++) {
-            try { if ((await fetch(baseURL)).ok) break; } catch (_) {}
+            try { const response = await fetch(baseURL); await response.arrayBuffer(); if (response.ok) break; } catch (_) {}
             if (i === 99) throw new Error(`Server not ready: ${serverLogs}`);
             await new Promise(resolve => setTimeout(resolve, 100));
         }

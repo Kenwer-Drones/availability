@@ -53,7 +53,7 @@
                 <div id="signup-recovery" hidden>
                     <p class="question">What is your nickname?</p>
                     <label>Nickname answer<input id="security-answer" maxlength="256" autocomplete="off"></label>
-                    <label>Your timezone<select id="timezone"></select></label>
+                    <label>Country / timezone<select id="timezone">{% for option in timezone_options %}<option value="{{ option.value }}">{{ option.label }}</option>{% endfor %}</select></label>
                 </div>
                 <div id="reset-fields" hidden>
                     <p class="question" id="recovery-question"></p>

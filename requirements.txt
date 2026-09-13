@@ -4,3 +4,4 @@ gunicorn==22.0.0
 psycopg2-binary==2.9.9
 gevent==24.2.1
 gevent-websocket==0.10.1
+tzdata==2026.3

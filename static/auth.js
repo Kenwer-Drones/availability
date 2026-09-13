@@ -41,11 +41,16 @@ function setMode(value) {
     setMessage('');
 }
 function fillTimezones() {
-    const zones = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : ['America/Phoenix', 'Asia/Kolkata', 'America/Los_Angeles', 'UTC'];
     const detected = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Phoenix';
-    const supported = [...new Set(['America/Phoenix', detected, ...zones])];
-    $('timezone').replaceChildren(...supported.map(zone => new Option(zone, zone)));
-    $('timezone').value = detected;
+    const canonical = zone => {
+        try { return new Intl.DateTimeFormat('en', { timeZone: zone }).resolvedOptions().timeZone; }
+        catch (_) { return null; }
+    };
+    const options = Array.from($('timezone').options);
+    // Do not offer new zones an older browser cannot render on the schedule.
+    options.forEach(option => { if (!canonical(option.value)) option.remove(); });
+    const match = options.find(option => option.isConnected && canonical(option.value) === canonical(detected));
+    $('timezone').value = match?.value || 'America/Phoenix';
 }
 async function request(path, method = 'GET', body) {
     const response = await fetch(`/api/auth${path}`, {

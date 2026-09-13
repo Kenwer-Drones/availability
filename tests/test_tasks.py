@@ -90,6 +90,35 @@ class TaskBoardTests(unittest.TestCase):
         self.send(self.bob, f"/{task['id']}", 'PATCH', version=1, title='Edited', assignee='BB', deadline='2026-09-15T08:00')
         self.assertNotIn(task['id'], [t['id'] for t in self.tasks()])
 
+    def test_india_signup_aliases_and_login(self):
+        for initials, zone in [('IA', 'Asia/Kolkata'), ('IB', 'Asia/Calcutta'), ('IC', 'Asia/Kolkatha')]:
+            with self.subTest(zone=zone):
+                client = self.app.test_client()
+                response = self.send(client, '/register', initials=initials, name='India user', password='long-password', security_answer='nickname', timezone=zone)
+                self.assertEqual(response.status_code, 200, response.json)
+                self.assertIsNone(client.get('/api/auth/session').json['user'])
+                self.assertEqual(self.send(client, '/login', initials=initials, password='long-password').status_code, 200)
+                self.assertEqual(client.get('/api/auth/session').json['profile']['timezone'], 'Asia/Kolkata')
+
+    def test_country_timezone_catalog_and_missing_os_database(self):
+        from country_timezones import timezone_options, bundled_zone, normalize_timezone
+        import zoneinfo
+        choices = timezone_options()
+        india = next(option for option in choices if option['value'] == 'Asia/Kolkata')
+        self.assertEqual(india['label'], 'India — Kolkata (IST) (UTC+05:30)')
+        old_path = zoneinfo.TZPATH
+        try:
+            zoneinfo.reset_tzpath(())
+            bundled_zone.cache_clear()
+            for option in choices:
+                self.assertEqual(normalize_timezone(option['value']), option['value'])
+                self.assertIsNotNone(bundled_zone(option['value']))
+        finally:
+            zoneinfo.reset_tzpath(old_path)
+        response = self.send(self.visitor, '/register', initials='IZ', name='Invalid', password='long-password', security_answer='nickname', timezone='Not/AZone')
+        self.assertEqual(response.status_code, 400)
+        self.assertNotIn('IZ', self.directory())
+
     def test_arizona_deadline_to_utc_and_india(self):
         task = self.create()
         self.assertEqual(task['deadline'], '2026-09-15T15:00:00+00:00')

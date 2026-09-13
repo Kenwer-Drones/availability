@@ -56,7 +56,10 @@ without altering or deleting existing slot data. Existing slot owners seed the
 user directory. Profiles previously held only in memory with no saved slots need
 to visit Availability once to register in the persistent directory.
 
-No new Python dependencies or Render configuration are required. Deploy the new
+The pinned `tzdata` dependency supplies country labels and timezone rules even
+when the host timezone database is absent. Signup and Availability use the same
+country/city choices. India aliases normalize to `Asia/Kolkata`.
+No Render configuration changes are required. Deploy the new
 commit using the existing service's normal deployment process. PostgreSQL-backed
 production uses Secure, HttpOnly, SameSite cookies and requires HTTPS.
 

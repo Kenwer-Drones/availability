@@ -2,7 +2,7 @@ from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO, emit
 import os
 import sqlite3
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from country_timezones import normalize_timezone
 import threading
 import time as time_module
 from datetime import datetime, timezone, timedelta
@@ -211,9 +211,9 @@ def set_timezone():
         return jsonify(error='Invalid name or timezone.'), 400
     timezone, name = timezone.strip(), name.strip()
     try:
-        ZoneInfo(timezone)
-    except (ZoneInfoNotFoundError, ValueError):
-        return jsonify(error='Invalid timezone.'), 400
+        timezone = normalize_timezone(timezone)
+    except ValueError as error:
+        return jsonify(error=str(error)), 400
 
     if not initials or not timezone:
         return jsonify({'error': 'Missing initials or timezone'}), 400
