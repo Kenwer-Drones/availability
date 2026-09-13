@@ -6,6 +6,7 @@ let boardState = { tasks: [], users: {}, user: null };
 let editing = null;
 let deleting = null;
 let registering = false;
+let recovering = false;
 let busy = false;
 let refreshSequence = 0;
 let draggedTaskId = null;
@@ -239,6 +240,15 @@ function openAccount() {
 }
 function setAuthMode(mode) {
     registering = mode;
+    recovering = false;
+    $('auth-tabs')?.removeAttribute('hidden');
+    $('password-field').hidden = false;
+    $('forgot-password').hidden = mode;
+    $('recovery-fields').hidden = true;
+    $('register-recovery-fields').hidden = !mode;
+    $('auth-security-question').required = mode;
+    $('auth-security-answer-create').required = mode;
+    $('auth-password').required = true;
     $('name-field').hidden = !mode;
     $('auth-name').required = mode;
     $('register-note').hidden = !mode;
@@ -249,6 +259,30 @@ function setAuthMode(mode) {
     $('login-tab').setAttribute('aria-pressed', String(!mode));
     $('register-tab').setAttribute('aria-pressed', String(mode));
     $('auth-error').textContent = '';
+}
+async function openRecovery() {
+    const initials = $('auth-initials').value.trim().toUpperCase();
+    if (!/^[A-Z]{2,3}$/.test(initials)) {
+        $('auth-error').textContent = 'Enter your initials first.';
+        return;
+    }
+    try {
+        const result = await api(`/security-question?initials=${encodeURIComponent(initials)}`);
+        recovering = true;
+        $('auth-tabs').hidden = true;
+        $('name-field').hidden = true;
+        $('password-field').hidden = true;
+        $('forgot-password').hidden = true;
+        $('register-note').hidden = true;
+        $('recovery-fields').hidden = false;
+        $('recovery-question').textContent = result.question;
+        $('auth-security-answer').value = '';
+        $('auth-new-password').value = '';
+        $('auth-submit').textContent = 'Reset password';
+        $('account-title').textContent = 'Reset your password';
+        $('auth-error').textContent = '';
+        $('auth-new-password').focus();
+    } catch (error) { $('auth-error').textContent = error.message; }
 }
 function openTask(task = null, assignee = boardState.user) {
     if (!boardState.user) { openAccount(); return; }
@@ -291,9 +325,16 @@ function submitForm(formId, errorId, action) {
     });
 }
 submitForm('account-form', 'auth-error', async () => {
-    await api(registering ? '/register' : '/login', 'POST', {
+    if (recovering) {
+        await api('/reset-password', 'POST', {
+            initials: $('auth-initials').value, security_answer: $('auth-security-answer').value,
+            new_password: $('auth-new-password').value
+        });
+    } else await api(registering ? '/register' : '/login', 'POST', {
         initials: $('auth-initials').value, name: $('auth-name').value,
-        password: $('auth-password').value, timezone: localStorage.getItem('userTimezone') || ARIZONA
+        password: $('auth-password').value, timezone: localStorage.getItem('userTimezone') || ARIZONA,
+        security_question: $('auth-security-question')?.value || 'What is your account initials?',
+        security_answer: $('auth-security-answer-create')?.value || $('auth-initials').value
     });
     $('auth-password').value = '';
     $('account-dialog').close();
@@ -318,6 +359,7 @@ $('account-button').onclick = async () => {
 };
 $('login-tab').onclick = () => setAuthMode(false);
 $('register-tab').onclick = () => setAuthMode(true);
+$('forgot-password').onclick = openRecovery;
 $('add-task').onclick = () => openTask();
 $('search').oninput = render;
 $('show-completed').onchange = render;

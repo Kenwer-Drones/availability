@@ -52,7 +52,18 @@ def register_tasks(app, socketio, get_db, postgres=False):
                 timezone TEXT NOT NULL DEFAULT 'America/Phoenix')''')
             run('''CREATE TABLE IF NOT EXISTS task_accounts (
                 initials TEXT PRIMARY KEY REFERENCES team_users(initials),
-                password_hash TEXT NOT NULL)''')
+                password_hash TEXT NOT NULL,
+                security_question TEXT,
+                security_answer_hash TEXT)''')
+            if postgres:
+                run('ALTER TABLE task_accounts ADD COLUMN IF NOT EXISTS security_question TEXT')
+                run('ALTER TABLE task_accounts ADD COLUMN IF NOT EXISTS security_answer_hash TEXT')
+            else:
+                columns = {row['name'] for row in run('PRAGMA table_info(task_accounts)').fetchall()}
+                if 'security_question' not in columns:
+                    run('ALTER TABLE task_accounts ADD COLUMN security_question TEXT')
+                if 'security_answer_hash' not in columns:
+                    run('ALTER TABLE task_accounts ADD COLUMN security_answer_hash TEXT')
             run('''CREATE TABLE IF NOT EXISTS task_sessions (
                 token_hash TEXT PRIMARY KEY,
                 initials TEXT NOT NULL REFERENCES task_accounts(initials),
@@ -92,8 +103,7 @@ def register_tasks(app, socketio, get_db, postgres=False):
         if not token:
             return None
         with database() as run:
-            row = run('SELECT initials FROM task_sessions WHERE token_hash=? AND expires_at>? ',
-                      (digest(token), now())).fetchone()
+            row = run('SELECT initials FROM task_sessions WHERE token_hash=?', (digest(token),)).fetchone()
         return row['initials'] if row else None
 
     def payload():
@@ -170,9 +180,9 @@ def register_tasks(app, socketio, get_db, postgres=False):
 
     def session_response(initials):
         token = secrets.token_urlsafe(32)
-        expires = (datetime.now(timezone.utc) + timedelta(days=14)).isoformat(timespec='seconds')
+        # The user explicitly stays signed in until signing out.
+        expires = '9999-12-31T23:59:59+00:00'
         with database(write=True) as run:
-            run('DELETE FROM task_sessions WHERE expires_at<=?', (now(),))
             old = request.cookies.get(cookie_name)
             if old:
                 run('DELETE FROM task_sessions WHERE token_hash=?', (digest(old),))
@@ -180,7 +190,7 @@ def register_tasks(app, socketio, get_db, postgres=False):
                 (digest(token), initials, expires))
         response = jsonify(user=initials)
         response.set_cookie(cookie_name, token, httponly=True, secure=bool(postgres or request.is_secure),
-                            samesite='Lax', max_age=14 * 86400, path='/')
+                            samesite='Lax', max_age=10 * 365 * 86400, path='/')
         return response
 
     @bp.get('/tasks')
@@ -197,7 +207,7 @@ def register_tasks(app, socketio, get_db, postgres=False):
         if g.task_user and legacy_token:
             response.set_cookie(cookie_name, legacy_token, httponly=True,
                                 secure=bool(postgres or request.is_secure), samesite='Lax',
-                                max_age=14 * 86400, path='/')
+                                max_age=10 * 365 * 86400, path='/')
         return response
 
     @bp.post('/api/tasks/register')
@@ -211,6 +221,8 @@ def register_tasks(app, socketio, get_db, postgres=False):
         password = field(data, 'password', 256)
         if len(password) < 10:
             abort(400, description='Use a password of at least 10 characters.')
+        security_question = field(data, 'security_question', 200)
+        security_answer = field(data, 'security_answer', 256)
         tz = field(data, 'timezone', 100, required=False) or 'America/Phoenix'
         try:
             ZoneInfo(tz)
@@ -223,7 +235,10 @@ def register_tasks(app, socketio, get_db, postgres=False):
                 abort(409, description='This profile already has a task account. Sign in instead.')
             run('''INSERT INTO team_users (initials, name, timezone) VALUES (?, ?, ?)
                    ON CONFLICT(initials) DO NOTHING''', (initials, name, tz))
-            run('INSERT INTO task_accounts (initials, password_hash) VALUES (?, ?)', (initials, password_hash))
+            run('''INSERT INTO task_accounts
+                   (initials, password_hash, security_question, security_answer_hash)
+                   VALUES (?, ?, ?, ?)''',
+                (initials, password_hash, security_question, generate_password_hash(security_answer.casefold())))
         socketio.emit('tz_update', directory())
         return session_response(initials)
 
@@ -238,6 +253,35 @@ def register_tasks(app, socketio, get_db, postgres=False):
             row = run('SELECT password_hash FROM task_accounts WHERE initials=?', (initials,)).fetchone()
         if not row or not check_password_hash(row['password_hash'], password):
             abort(401, description='Incorrect initials or password.')
+        return session_response(initials)
+
+    @bp.get('/api/auth/security-question')
+    def security_question():
+        initials = request.args.get('initials', '').strip().upper()
+        if not re.fullmatch(r'[A-Z]{2,3}', initials):
+            abort(400, description='Enter valid initials.')
+        with database() as run:
+            row = run('SELECT security_question FROM task_accounts WHERE initials=?', (initials,)).fetchone()
+        if not row or not row['security_question']:
+            abort(404, description='No password recovery question is set for this account.')
+        return jsonify(question=row['security_question'])
+
+    @bp.post('/api/auth/reset-password')
+    def reset_password():
+        data = payload()
+        initials = field(data, 'initials', 3).upper()
+        answer = field(data, 'security_answer', 256)
+        new_password = field(data, 'new_password', 256)
+        if len(new_password) < 10:
+            abort(400, description='Use a password of at least 10 characters.')
+        throttle(initials)
+        with database(write=True) as run:
+            row = run('''SELECT security_answer_hash FROM task_accounts WHERE initials=?''', (initials,)).fetchone()
+            if not row or not row['security_answer_hash'] or not check_password_hash(row['security_answer_hash'], answer.casefold()):
+                abort(401, description='The security answer is incorrect.')
+            run('DELETE FROM task_sessions WHERE initials=?', (initials,))
+            run('UPDATE task_accounts SET password_hash=? WHERE initials=?',
+                (generate_password_hash(new_password), initials))
         return session_response(initials)
 
     @bp.post('/api/tasks/logout')

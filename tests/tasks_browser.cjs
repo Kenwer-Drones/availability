@@ -35,7 +35,7 @@ const net = require('node:net');
         const bob = await browser.newContext({ baseURL });
         const headers = { 'X-Task-Request': '1' };
         for (const [context, initials, name, timezone] of [[alice, 'CR', 'Chiranjiva Rao', 'Asia/Kolkata'], [bob, 'RR', 'Rohan', 'America/Lima']]) {
-            const response = await context.request.post('/api/tasks/register', { headers, data: { initials, name, timezone, password: 'browser-test-password' } });
+            const response = await context.request.post('/api/tasks/register', { headers, data: { initials, name, timezone, password: 'browser-test-password', security_question: 'What is the test answer?', security_answer: 'browser' } });
             assert.equal(response.status(), 200, await response.text());
         }
         await alice.request.post('/api/timezones', { data: { initials: 'YR', name: 'Yashwanth Reddy', timezone: 'Asia/Kolkata' } });

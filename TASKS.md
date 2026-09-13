@@ -20,9 +20,9 @@ Availability remains at `/`. The **Tasks** navigation link opens `/tasks`.
 The whole site now uses one password-protected account session. On either
 Availability or Tasks, choose **Sign in > Create account** and use the person's
 availability initials. Passwords require at least 10 characters and are hashed
-with Werkzeug. The HttpOnly site-wide session lasts 14 days and survives page
-navigation, refreshes, and moving between Availability and Tasks. It is cleared
-only when the user signs out or the session expires. Completion never trusts
+with Werkzeug. The HttpOnly site-wide session remains active until the user
+signs out and survives page navigation, refreshes, and moving between
+Availability and Tasks. Completion never trusts
 initials supplied by the browser.
 
 Initial account registration is self-service and first-claim, consistent with

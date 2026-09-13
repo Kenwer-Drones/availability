@@ -72,6 +72,8 @@ textarea { resize: vertical; }
 .muted { color: #747982; font-size: 12px; font-weight: 400; }
 .auth-tabs { display: flex; gap: 6px; }
 .auth-tabs [aria-pressed="true"] { background: #eaf0fd; color: #2855b6; border-color: #afc4ef; }
+.text-button { border: 0; padding: 0; color: #3367d6; background: transparent; font-size: 12px; }
+.text-button:hover { background: transparent; text-decoration: underline; }
 .danger { background: #b9342d; color: #fff; border-color: #b9342d; }
 #delete-name { overflow-wrap: anywhere; }
 [hidden] { display: none !important; }

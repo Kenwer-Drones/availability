@@ -95,12 +95,19 @@
         }
 
         .timezone-team {
+            position: relative;
             display: flex;
             align-items: center;
             gap: 6px;
             flex-wrap: wrap;
             max-width: 520px;
         }
+
+        .timezone-team summary { cursor: pointer; list-style: none; color: #555; font-size: 12px; padding: 5px 8px; border: 1px solid #ddd; border-radius: 14px; background: #fff; }
+        .timezone-team summary::-webkit-details-marker { display: none; }
+        .timezone-team summary::after { content: ' v'; color: #777; }
+        .timezone-team[open] summary::after { content: ' ^'; }
+        .timezone-team-list { position: absolute; right: 0; top: 34px; z-index: 20; min-width: 220px; max-width: 320px; padding: 8px; border: 1px solid #ddd; border-radius: 8px; background: #fff; box-shadow: 0 4px 14px rgba(0,0,0,.12); }
 
         .timezone-chip {
             display: inline-flex;
@@ -522,6 +529,7 @@
         .auth-tabs button { margin:0; width:auto; padding:7px 10px; background:#fff; color:#555; border:1px solid #ccc; }
         .auth-tabs button[aria-pressed="true"] { background:#eaf0fd; color:#2855b6; border-color:#afc4ef; }
         .setup-box .muted { color:#777; font-size:12px; line-height:1.4; }
+        .text-button { margin: 10px 0 0 !important; width: auto !important; padding: 0 !important; background: transparent !important; color: #3367d6 !important; font-size: 12px; }
     </style>
 </head>
 <body>
@@ -532,7 +540,10 @@
             <span id="user-display" style="font-size:13px; color:#333;"></span>
             <label for="tz-select">Timezone:</label>
             <select id="tz-select"></select>
-            <div class="timezone-team" id="timezone-team"></div>
+            <details class="timezone-team" id="timezone-team">
+                <summary id="timezone-team-summary">Team time zones</summary>
+                <div class="timezone-team-list" id="timezone-team-list"></div>
+            </details>
             <button class="btn-reset" id="btn-reset-user" style="display:none;">Sign out</button>
         </div>
     </header>
@@ -562,6 +573,20 @@
             <label for="setup-password">Password</label>
             <input type="password" id="setup-password" maxlength="256" autocomplete="current-password" placeholder="Your task account password">
             <p class="muted" id="availability-register-note" hidden>Use at least 10 characters. This account will sign you into Availability and Tasks.</p>
+            <div id="availability-recovery-fields" hidden>
+                <label for="setup-security-question">Password recovery question</label>
+                <input type="text" id="setup-security-question" maxlength="200" placeholder="Example: What city were you born in?">
+                <label for="setup-security-answer">Answer</label>
+                <input type="text" id="setup-security-answer" maxlength="256" autocomplete="off">
+            </div>
+            <button type="button" class="text-button" id="availability-forgot-password">Forgot password?</button>
+            <div id="availability-reset-fields" hidden>
+                <p class="muted" id="availability-recovery-question"></p>
+                <label for="setup-reset-answer">Answer</label>
+                <input type="text" id="setup-reset-answer" maxlength="256" autocomplete="off">
+                <label for="setup-new-password">New password</label>
+                <input type="password" id="setup-new-password" maxlength="256" autocomplete="new-password">
+            </div>
             <label for="setup-tz">Your Timezone</label>
             <select id="setup-tz"></select>
             <div class="error" id="setup-error"></div>
@@ -835,9 +860,11 @@
         }
 
         function renderTimezoneTeam() {
-            const el = document.getElementById('timezone-team');
+            const el = document.getElementById('timezone-team-list');
+            const summary = document.getElementById('timezone-team-summary');
             if (!el) return;
             const entries = Object.entries(timezonesCache).sort(([a], [b]) => a.localeCompare(b));
+            summary.textContent = entries.length ? `Team time zones (${entries.length})` : 'Team time zones';
             if (entries.length === 0) {
                 el.innerHTML = '';
                 return;
@@ -865,9 +892,11 @@
         }
 
         let availabilityRegisterMode = false;
+        let availabilityRecovering = false;
 
         function setAvailabilityAuthMode(registerMode) {
             availabilityRegisterMode = registerMode;
+            availabilityRecovering = false;
             document.getElementById('auth-title').textContent = registerMode ? 'Create your team account' : 'Sign in to Team Availability';
             document.getElementById('setup-name').parentElement.style.display = registerMode ? '' : '';
             document.getElementById('setup-name').style.display = registerMode ? '' : 'none';
@@ -875,10 +904,41 @@
             document.getElementById('setup-password').autocomplete = registerMode ? 'new-password' : 'current-password';
             document.getElementById('setup-password').minLength = registerMode ? 10 : 1;
             document.getElementById('availability-register-note').hidden = !registerMode;
+            document.getElementById('availability-recovery-fields').hidden = !registerMode;
+            document.getElementById('availability-reset-fields').hidden = true;
+            document.getElementById('availability-forgot-password').hidden = registerMode;
+            document.getElementById('setup-security-question').required = registerMode;
+            document.getElementById('setup-security-answer').required = registerMode;
             document.getElementById('setup-confirm').textContent = registerMode ? 'Create account' : 'Sign in';
             document.getElementById('availability-login-tab').setAttribute('aria-pressed', String(!registerMode));
             document.getElementById('availability-register-tab').setAttribute('aria-pressed', String(registerMode));
             document.getElementById('setup-error').textContent = '';
+        }
+
+        async function openAvailabilityRecovery() {
+            const initials = document.getElementById('setup-initials').value.trim().toUpperCase();
+            const errorEl = document.getElementById('setup-error');
+            if (!/^[A-Z]{2,3}$/.test(initials)) { errorEl.textContent = 'Enter your initials first.'; return; }
+            try {
+                const response = await fetch(`/api/auth/security-question?initials=${encodeURIComponent(initials)}`, { cache: 'no-store' });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Unable to find this account.');
+                availabilityRecovering = true;
+                document.getElementById('availability-login-tab').hidden = true;
+                document.getElementById('availability-register-tab').hidden = true;
+                document.querySelector('label[for="setup-name"]').style.display = 'none';
+                document.getElementById('setup-name').style.display = 'none';
+                document.querySelector('label[for="setup-password"]').style.display = 'none';
+                document.getElementById('setup-password').style.display = 'none';
+                document.getElementById('availability-register-note').hidden = true;
+                document.getElementById('availability-recovery-fields').hidden = true;
+                document.getElementById('availability-forgot-password').hidden = true;
+                document.getElementById('availability-reset-fields').hidden = false;
+                document.getElementById('availability-recovery-question').textContent = data.question;
+                document.getElementById('auth-title').textContent = 'Reset your password';
+                document.getElementById('setup-confirm').textContent = 'Reset password';
+                errorEl.textContent = '';
+            } catch (err) { errorEl.textContent = err.message; }
         }
 
         async function showSetupIfNeeded() {
@@ -919,23 +979,37 @@
 
         document.getElementById('availability-login-tab').addEventListener('click', () => setAvailabilityAuthMode(false));
         document.getElementById('availability-register-tab').addEventListener('click', () => setAvailabilityAuthMode(true));
+        document.getElementById('availability-forgot-password').addEventListener('click', openAvailabilityRecovery);
 
         document.getElementById('setup-confirm').addEventListener('click', async () => {
             const name = document.getElementById('setup-name').value.trim();
             const initials = document.getElementById('setup-initials').value.toUpperCase().replace(/[^A-Z]/g, '');
             const password = document.getElementById('setup-password').value;
+            const securityQuestion = document.getElementById('setup-security-question').value.trim();
+            const securityAnswer = document.getElementById('setup-security-answer').value.trim();
             const tz = document.getElementById('setup-tz').value;
             const errorEl = document.getElementById('setup-error');
             if (!initials || initials.length < 2 || initials.length > 3) { errorEl.textContent = 'Enter 2 or 3 letters for your initials.'; return; }
             if (availabilityRegisterMode && !name) { errorEl.textContent = 'Please enter your name.'; return; }
             if (!password || (availabilityRegisterMode && password.length < 10)) { errorEl.textContent = availabilityRegisterMode ? 'Use a password of at least 10 characters.' : 'Enter your password.'; return; }
+            if (availabilityRegisterMode && (!securityQuestion || !securityAnswer)) { errorEl.textContent = 'Add a recovery question and answer.'; return; }
             const button = document.getElementById('setup-confirm');
             button.disabled = true;
             errorEl.textContent = '';
             try {
+                if (availabilityRecovering) {
+                    const resetResponse = await fetch('/api/auth/reset-password', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Task-Request': '1' },
+                        body: JSON.stringify({ initials, security_answer: document.getElementById('setup-reset-answer').value.trim(), new_password: document.getElementById('setup-new-password').value })
+                    });
+                    const resetData = await resetResponse.json();
+                    if (!resetResponse.ok) throw new Error(resetData.error || 'Unable to reset password.');
+                    location.reload();
+                    return;
+                }
                 const response = await fetch(`/api/auth/${availabilityRegisterMode ? 'register' : 'login'}`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Task-Request': '1' },
-                    body: JSON.stringify({ initials, name, password, timezone: tz })
+                    body: JSON.stringify({ initials, name, password, timezone: tz, security_question: securityQuestion, security_answer: securityAnswer })
                 });
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error || 'Unable to authenticate.');

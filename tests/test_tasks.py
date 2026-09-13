@@ -32,7 +32,8 @@ class TaskBoardTests(unittest.TestCase):
         self.visitor = self.app.test_client()
         self.headers = {'X-Task-Request': '1'}
         for client, initials in ((self.alice, 'AA'), (self.bob, 'BB')):
-            response = self.send(client, '/register', initials=initials, name=initials, password='a-long-password')
+            response = self.send(client, '/register', initials=initials, name=initials, password='a-long-password',
+                                 security_question='What is your favorite color?', security_answer='blue')
             self.assertEqual(response.status_code, 200)
 
     def tearDown(self):
@@ -152,7 +153,8 @@ class TaskBoardTests(unittest.TestCase):
 
     def test_password_login_logout_and_no_second_claim(self):
         self.assertEqual(self.send(self.visitor, '/login', initials='BB', password='incorrect').status_code, 401)
-        self.assertEqual(self.send(self.visitor, '/register', initials='BB', name='Imposter', password='long-password').status_code, 409)
+        self.assertEqual(self.send(self.visitor, '/register', initials='BB', name='Imposter', password='long-password',
+                                   security_question='Question', security_answer='answer').status_code, 409)
         response = self.send(self.visitor, '/login', initials='BB', password='a-long-password')
         self.assertEqual(response.status_code, 200)
         self.assertIn('HttpOnly', response.headers['Set-Cookie'])
@@ -164,12 +166,24 @@ class TaskBoardTests(unittest.TestCase):
         self.assertIsNone(self.visitor.get('/api/tasks/session').json['user'])
         self.assertIsNone(self.visitor.get('/api/auth/session').json['user'])
 
-    def test_expired_session_rejected(self):
+    def test_session_remains_active_until_logout(self):
         conn = self.get_db()
         conn.execute("UPDATE task_sessions SET expires_at='2000-01-01T00:00:00+00:00'")
         conn.commit()
         conn.close()
-        self.assertEqual(self.send(self.alice, title='Task').status_code, 401)
+        self.assertEqual(self.send(self.alice, title='Task').status_code, 201)
+
+    def test_security_question_password_reset(self):
+        response = self.visitor.get('/api/auth/security-question?initials=BB', headers=self.headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json['question'], 'What is your favorite color?')
+        response = self.visitor.post('/api/auth/reset-password', headers=self.headers,
+                                     json={'initials': 'BB', 'security_answer': 'BLUE', 'new_password': 'new-long-password'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.visitor.get('/api/auth/session').json['user'], 'BB')
+        self.send(self.visitor, '/logout')
+        self.assertEqual(self.send(self.visitor, '/login', initials='BB', password='new-long-password').status_code, 200)
+        self.assertEqual(self.send(self.visitor, '/login', initials='BB', password='a-long-password').status_code, 401)
 
     def test_persistence_after_app_restart(self):
         self.create()

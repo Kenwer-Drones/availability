@@ -33,11 +33,21 @@
     <dialog id="account-dialog" aria-labelledby="account-title">
         <form id="account-form">
             <div class="dialog-heading"><h2 id="account-title">Sign in to tasks</h2><button type="button" class="icon-button close-dialog" title="Close" aria-label="Close">&times;</button></div>
-            <div class="auth-tabs" role="group" aria-label="Account action"><button type="button" id="login-tab" aria-pressed="true">Sign in</button><button type="button" id="register-tab" aria-pressed="false">Create account</button></div>
+            <div class="auth-tabs" id="auth-tabs" role="group" aria-label="Account action"><button type="button" id="login-tab" aria-pressed="true">Sign in</button><button type="button" id="register-tab" aria-pressed="false">Create account</button></div>
             <label>Initials<input id="auth-initials" name="username" autocomplete="username" required pattern="[A-Za-z]{2,3}" minlength="2" maxlength="3"></label>
             <label id="name-field" hidden>Your name<input id="auth-name" name="name" autocomplete="name" maxlength="60"></label>
-            <label>Password<input id="auth-password" name="password" type="password" autocomplete="current-password" required maxlength="256"></label>
+            <label id="password-field">Password<input id="auth-password" name="password" type="password" autocomplete="current-password" required maxlength="256"></label>
             <p id="register-note" class="muted" hidden>Use your availability initials and a password of at least 10 characters. Each profile can create its task account once.</p>
+            <div id="register-recovery-fields" hidden>
+                <label>Password recovery question<input id="auth-security-question" type="text" maxlength="200" placeholder="Example: What city were you born in?"></label>
+                <label>Answer<input id="auth-security-answer-create" type="text" autocomplete="off" maxlength="256"></label>
+            </div>
+            <button type="button" class="text-button" id="forgot-password">Forgot password?</button>
+            <div id="recovery-fields" hidden>
+                <p class="muted" id="recovery-question"></p>
+                <label>Answer<input id="auth-security-answer" type="text" autocomplete="off" maxlength="256"></label>
+                <label>New password<input id="auth-new-password" type="password" autocomplete="new-password" minlength="10" maxlength="256"></label>
+            </div>
             <p class="form-error" id="auth-error" role="alert"></p>
             <div class="dialog-actions"><button type="button" class="close-dialog">Cancel</button><button class="primary" id="auth-submit">Sign in</button></div>
         </form>
