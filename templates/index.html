@@ -549,17 +549,9 @@
 </head>
 <body>
     <header class="site-header">
-        <h1 class="site-title"><img src="/static/icon.png" alt="logo" style="width:26px; height:26px;">Team Availability</h1>
-        <nav class="page-nav" aria-label="Pages"><a href="/" aria-current="page">Availability</a><a href="/tasks">Tasks</a></nav>
-        <div class="account user-setup">
-            <span id="user-display" style="font-size:13px; color:#333;"></span>
-            <details class="timezone-team" id="timezone-team">
-                <summary id="timezone-team-summary">Team time zones</summary>
-                <div class="timezone-team-list" id="timezone-team-list"></div>
-            </details>
-            <button id="admin-people" style="display:none;">Manage people</button>
-            <button class="btn-reset" id="btn-reset-user" style="display:none;">Sign out</button>
-        </div>
+        <h1 class="site-title"><img src="/static/icon.png" alt="" width="26" height="26">Team Availability</h1>
+        <nav aria-label="Pages"><a href="/" aria-current="page">Availability</a><a href="/tasks">Tasks</a></nav>
+        <div class="account"><span id="user-display"></span><button id="admin-people" hidden>Manage people</button><button id="btn-reset-user" class="btn-reset" hidden>Sign out</button></div>
     </header>
 
     <div class="main-container">
@@ -811,8 +803,8 @@
                     lockInitials(session.user, session.profile.name || session.user);
                     setUserTimezone(session.profile.timezone || STANDARD_TIMEZONE);
                     document.getElementById('user-display').textContent = `Logged in as: ${session.profile.name || session.user} (${session.user})`;
-                    document.getElementById('admin-people').style.display = session.user === 'CR' ? 'inline-block' : 'none';
-                    document.getElementById('btn-reset-user').style.display = 'inline-block';
+                    document.getElementById('admin-people').hidden = session.user !== 'CR';
+                    document.getElementById('btn-reset-user').hidden = false;
                     return true;
                 }
             } catch (err) {
