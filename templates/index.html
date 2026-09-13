@@ -607,6 +607,20 @@
         }
 
         function setCurrentUserColorVars() {
+            const selectedTz = getUserTimezone();
+            const matchingTimezoneUsers = Object.entries(timezonesCache)
+                .filter(([initials, info]) => info && info.timezone === selectedTz)
+                .sort(([a], [b]) => a.localeCompare(b));
+
+            if (matchingTimezoneUsers.length > 0) {
+                const [initials, info] = matchingTimezoneUsers[0];
+                const color = getColorForUser(initials, info.name || '');
+                document.documentElement.style.setProperty('--current-user-bg', color.bg);
+                document.documentElement.style.setProperty('--current-user-text', color.text);
+                document.documentElement.style.setProperty('--current-user-border', color.border);
+                return;
+            }
+
             const initials = getInitials();
             const name = getUserName();
             if (!initials) return;
@@ -823,6 +837,7 @@
                 const res = await fetch('/api/timezones');
                 timezonesCache = await res.json();
                 assignColorsFromCache();
+                setCurrentUserColorVars();
                 renderTimezoneTeam();
                 if (currentDate) renderSchedule(currentDate);
             } catch (err) {
@@ -873,6 +888,7 @@
             if (isInitialsLocked()) {
                 timezonesCache[getInitials()] = { timezone: tzSelect.value, name: getUserName() };
                 assignColorsFromCache();
+                setCurrentUserColorVars();
                 renderTimezoneTeam();
                 registerTimezone(getInitials(), getUserName(), tzSelect.value);
             }
@@ -1203,6 +1219,7 @@
             console.log('Timezone update:', timezones);
             timezonesCache = timezones || {};
             assignColorsFromCache();
+            setCurrentUserColorVars();
             renderTimezoneTeam();
             if (currentDate) renderSchedule(currentDate);
         });
