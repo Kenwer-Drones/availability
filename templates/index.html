@@ -232,6 +232,8 @@
             font-size: 13px;
         }
 
+        /* Keep the timezone control from flashing before the session is ready. */
+        body:not(.ready) .availability-settings { visibility: hidden; }
         .availability-settings .timezone-team { max-width: none; }
 
         .schedule-header {
