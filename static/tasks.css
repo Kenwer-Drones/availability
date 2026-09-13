@@ -33,7 +33,7 @@ h2 { font-size: 19px; margin: 0; }
 .column-count { color: #858a92; font-size: 13px; }
 .column-heading .icon-button { margin-left: auto; flex-shrink: 0; }
 .avatar { background: var(--user-bg, #f1f2f4); color: var(--user-text, #666); border: 1px solid var(--user-border, #ddd); width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 10px; font-weight: 600; }
-.task-card { border: 1px solid #e0e2e6; border-radius: 8px; padding: 14px; margin-bottom: 12px; box-shadow: 0 2px 4px #00000005; cursor: grab; }
+.task-card { background: #fff; border: 1px solid #d9dce1; border-radius: 12px; padding: 14px; margin-bottom: 12px; box-shadow: 0 2px 5px rgb(0 0 0 / 8%); cursor: grab; }
 .task-card:active { cursor: grabbing; }
 .task-card.dragging { opacity: .45; }
 .task-card.drop-before { border-top: 3px solid #3367d6; }
