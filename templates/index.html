@@ -560,39 +560,6 @@
         <span id="connection-status" class="disconnected">Connecting...</span>
     </div>
 
-    <div class="setup-overlay" id="setup-overlay" style="display:none;">
-        <div class="setup-box">
-            <h2 id="auth-title">Sign in to Team Availability</h2>
-            <div class="auth-tabs" role="group" aria-label="Account action">
-                <button type="button" id="availability-login-tab" aria-pressed="true">Sign in</button>
-                <button type="button" id="availability-register-tab" aria-pressed="false">Create account</button>
-            </div>
-            <label for="setup-name">Your Name</label>
-            <input type="text" id="setup-name" maxlength="30" placeholder="John Doe" style="text-transform:none;">
-            <label for="setup-initials">Your Initials (2-3 letters)</label>
-            <input type="text" id="setup-initials" maxlength="3" placeholder="JD">
-            <label for="setup-password">Password</label>
-            <input type="password" id="setup-password" maxlength="256" autocomplete="current-password" placeholder="Your task account password">
-            <p class="muted" id="availability-register-note" hidden>Use at least 10 characters. This account will sign you into Availability and Tasks.</p>
-            <div id="availability-recovery-fields" hidden>
-                <label for="setup-security-answer">What is your nickname?</label>
-                <input type="text" id="setup-security-answer" maxlength="256" autocomplete="off">
-            </div>
-            <button type="button" class="text-button" id="availability-forgot-password">Forgot password?</button>
-            <div id="availability-reset-fields" hidden>
-                <p class="muted" id="availability-recovery-question"></p>
-                <label for="setup-reset-answer">Answer</label>
-                <input type="text" id="setup-reset-answer" maxlength="256" autocomplete="off">
-                <label for="setup-new-password">New password</label>
-                <input type="password" id="setup-new-password" maxlength="256" autocomplete="new-password">
-            </div>
-            <label for="setup-tz">Your Timezone</label>
-            <select id="setup-tz"></select>
-            <div class="error" id="setup-error"></div>
-            <button id="setup-confirm">Sign in</button>
-        </div>
-    </div>
-
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
     <script>
         const socket = typeof io === 'function' ? io() : { on() {} };
@@ -890,55 +857,6 @@
             }
         }
 
-        let availabilityRegisterMode = false;
-        let availabilityRecovering = false;
-
-        function setAvailabilityAuthMode(registerMode) {
-            availabilityRegisterMode = registerMode;
-            availabilityRecovering = false;
-            document.getElementById('auth-title').textContent = registerMode ? 'Create your team account' : 'Sign in to Team Availability';
-            document.getElementById('setup-name').parentElement.style.display = registerMode ? '' : '';
-            document.getElementById('setup-name').style.display = registerMode ? '' : 'none';
-            document.querySelector('label[for="setup-name"]').style.display = registerMode ? '' : 'none';
-            document.getElementById('setup-password').autocomplete = registerMode ? 'new-password' : 'current-password';
-            document.getElementById('setup-password').minLength = registerMode ? 10 : 1;
-            document.getElementById('availability-register-note').hidden = !registerMode;
-            document.getElementById('availability-recovery-fields').hidden = !registerMode;
-            document.getElementById('availability-reset-fields').hidden = true;
-            document.getElementById('availability-forgot-password').hidden = registerMode;
-            document.getElementById('setup-security-answer').required = registerMode;
-            document.getElementById('setup-confirm').textContent = registerMode ? 'Create account' : 'Sign in';
-            document.getElementById('availability-login-tab').setAttribute('aria-pressed', String(!registerMode));
-            document.getElementById('availability-register-tab').setAttribute('aria-pressed', String(registerMode));
-            document.getElementById('setup-error').textContent = '';
-        }
-
-        async function openAvailabilityRecovery() {
-            const initials = document.getElementById('setup-initials').value.trim().toUpperCase();
-            const errorEl = document.getElementById('setup-error');
-            if (!/^[A-Z]{2,3}$/.test(initials)) { errorEl.textContent = 'Enter your initials first.'; return; }
-            try {
-                const response = await fetch(`/api/auth/security-question?initials=${encodeURIComponent(initials)}`, { cache: 'no-store' });
-                const data = await response.json();
-                if (!response.ok) throw new Error(data.error || 'Unable to find this account.');
-                availabilityRecovering = true;
-                document.getElementById('availability-login-tab').hidden = true;
-                document.getElementById('availability-register-tab').hidden = true;
-                document.querySelector('label[for="setup-name"]').style.display = 'none';
-                document.getElementById('setup-name').style.display = 'none';
-                document.querySelector('label[for="setup-password"]').style.display = 'none';
-                document.getElementById('setup-password').style.display = 'none';
-                document.getElementById('availability-register-note').hidden = true;
-                document.getElementById('availability-recovery-fields').hidden = true;
-                document.getElementById('availability-forgot-password').hidden = true;
-                document.getElementById('availability-reset-fields').hidden = false;
-                document.getElementById('availability-recovery-question').textContent = data.question;
-                document.getElementById('auth-title').textContent = 'Reset your password';
-                document.getElementById('setup-confirm').textContent = 'Reset password';
-                errorEl.textContent = '';
-            } catch (err) { errorEl.textContent = err.message; }
-        }
-
         async function showSetupIfNeeded() {
             try {
                 const res = await fetch('/api/auth/session', { cache: 'no-store' });
@@ -946,14 +864,14 @@
                 if (session.user && session.profile) {
                     lockInitials(session.user, session.profile.name || session.user);
                     setUserTimezone(session.profile.timezone || STANDARD_TIMEZONE);
-                    document.getElementById('setup-overlay').style.display = 'none';
                     document.getElementById('user-display').textContent = `Logged in as: ${session.profile.name || session.user} (${session.user})`;
                     document.getElementById('admin-people').style.display = session.user === 'CR' ? 'inline-block' : 'none';
                     document.getElementById('btn-reset-user').style.display = 'inline-block';
                     return true;
                 }
             } catch (err) {
-                document.getElementById('setup-error').textContent = 'Unable to connect. Please try again.';
+                document.getElementById('schedule-panel').textContent = 'Unable to connect. Refresh to try again.';
+                return false;
             }
             window.location.href = '/auth?next=/';
             return false;
@@ -969,59 +887,6 @@
             renderTimezoneTeam();
             registerTimezone(getInitials(), getUserName(), getUserTimezone());
             renderDatesPanel();
-        }
-
-        document.getElementById('availability-login-tab').addEventListener('click', () => setAvailabilityAuthMode(false));
-        document.getElementById('availability-register-tab').addEventListener('click', () => setAvailabilityAuthMode(true));
-        document.getElementById('availability-forgot-password').addEventListener('click', openAvailabilityRecovery);
-
-        document.getElementById('setup-confirm').addEventListener('click', async () => {
-            const name = document.getElementById('setup-name').value.trim();
-            const initials = document.getElementById('setup-initials').value.toUpperCase().replace(/[^A-Z]/g, '');
-            const password = document.getElementById('setup-password').value;
-            const securityAnswer = document.getElementById('setup-security-answer').value.trim();
-            const tz = document.getElementById('setup-tz').value;
-            const errorEl = document.getElementById('setup-error');
-            if (!initials || initials.length < 2 || initials.length > 3) { errorEl.textContent = 'Enter 2 or 3 letters for your initials.'; return; }
-            if (availabilityRegisterMode && !name) { errorEl.textContent = 'Please enter your name.'; return; }
-            if (!password || (availabilityRegisterMode && password.length < 10)) { errorEl.textContent = availabilityRegisterMode ? 'Use a password of at least 10 characters.' : 'Enter your password.'; return; }
-            if (availabilityRegisterMode && !securityAnswer) { errorEl.textContent = 'Enter your nickname for password recovery.'; return; }
-            const button = document.getElementById('setup-confirm');
-            button.disabled = true;
-            errorEl.textContent = '';
-            try {
-                if (availabilityRecovering) {
-                    const resetResponse = await fetch('/api/auth/reset-password', {
-                        method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Task-Request': '1' },
-                        body: JSON.stringify({ initials, security_answer: document.getElementById('setup-reset-answer').value.trim(), new_password: document.getElementById('setup-new-password').value })
-                    });
-                    const resetData = await resetResponse.json();
-                    if (!resetResponse.ok) throw new Error(resetData.error || 'Unable to reset password.');
-                    location.href = '/auth?mode=login&next=/';
-                    return;
-                }
-                const response = await fetch(`/api/auth/${availabilityRegisterMode ? 'register' : 'login'}`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Task-Request': '1' },
-                    body: JSON.stringify({ initials, name, password, timezone: tz, security_answer: securityAnswer })
-                });
-                const data = await response.json();
-                if (!response.ok) throw new Error(data.error || 'Unable to authenticate.');
-                document.getElementById('setup-password').value = '';
-                location.reload();
-            } catch (err) {
-                errorEl.textContent = err.message;
-                button.disabled = false;
-            }
-        });
-
-        /* The old browser-only profile flow is retained only for migration helpers. */
-        function legacySetupNoop() {
-            if (isInitialsLocked()) {
-                document.getElementById('setup-overlay').style.display = 'none';
-                document.getElementById('user-display').textContent = `Logged in as: ${getUserName()} (${getInitials()})`;
-                document.getElementById('btn-reset-user').style.display = 'inline-block';
-                return;
-            }
         }
 
         document.getElementById('btn-reset-user').addEventListener('click', resetUser);

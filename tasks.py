@@ -123,11 +123,12 @@ def register_tasks(app, socketio, get_db, postgres=False):
             abort(400, description='Expected a JSON object.')
         return data
 
-    def field(data, key, maximum, required=True):
+    def field(data, key, maximum, required=True, trim=True):
         value = data.get(key, '')
         if not isinstance(value, str) or len(value) > maximum:
             abort(400, description=f'Invalid {key}.')
-        value = value.strip()
+        if trim:
+            value = value.strip()
         if required and not value:
             abort(400, description=f'{key.capitalize()} is required.')
         return value
@@ -233,7 +234,7 @@ def register_tasks(app, socketio, get_db, postgres=False):
         if not re.fullmatch(r'[A-Z]{2,3}', initials):
             abort(400, description='Initials must be 2 or 3 letters.')
         name = field(data, 'name', 60)
-        password = field(data, 'password', 256)
+        password = field(data, 'password', 256, trim=False)
         if len(password) < 10:
             abort(400, description='Use a password of at least 10 characters.')
         security_answer = field(data, 'security_answer', 256)
@@ -246,22 +247,22 @@ def register_tasks(app, socketio, get_db, postgres=False):
         password_hash = generate_password_hash(password)
         with database(write=True) as run:
             if run('SELECT initials FROM task_accounts WHERE initials=?', (initials,)).fetchone():
-                abort(409, description='This profile already has a task account. Sign in instead.')
+                abort(409, description='These initials already have an account. Sign in or use Forgot password. If you are a different person, choose different initials.')
             run('''INSERT INTO team_users (initials, name, timezone) VALUES (?, ?, ?)
-                   ON CONFLICT(initials) DO NOTHING''', (initials, name, tz))
+                   ON CONFLICT(initials) DO UPDATE SET name=excluded.name, timezone=excluded.timezone''', (initials, name, tz))
             run('''INSERT INTO task_accounts
                    (initials, password_hash, security_question, security_answer_hash)
                    VALUES (?, ?, ?, ?)''',
                 (initials, password_hash, recovery_question, generate_password_hash(security_answer.casefold())))
         socketio.emit('tz_update', directory())
-        return session_response(initials)
+        return jsonify(status='created', initials=initials)
 
     @bp.post('/api/tasks/login')
     @bp.post('/api/auth/login')
     def login():
         data = payload()
         initials = field(data, 'initials', 3).upper()
-        password = field(data, 'password', 256)
+        password = field(data, 'password', 256, trim=False)
         throttle(initials)
         with database() as run:
             row = run('SELECT password_hash FROM task_accounts WHERE initials=?', (initials,)).fetchone()
@@ -276,10 +277,10 @@ def register_tasks(app, socketio, get_db, postgres=False):
         if not re.fullmatch(r'[A-Z]{2,3}', initials):
             abort(400, description='Enter valid initials.')
         with database() as run:
-            row = run('SELECT security_answer_hash FROM task_accounts WHERE initials=?', (initials,)).fetchone()
+            row = run('SELECT security_question, security_answer_hash FROM task_accounts WHERE initials=?', (initials,)).fetchone()
         if not row or not row['security_answer_hash']:
             abort(404, description='No password recovery question is set for this account.')
-        return jsonify(question=recovery_question)
+        return jsonify(question=row['security_question'] or recovery_question)
 
     @bp.post('/api/tasks/reset-password')
     @bp.post('/api/auth/reset-password')
@@ -287,7 +288,7 @@ def register_tasks(app, socketio, get_db, postgres=False):
         data = payload()
         initials = field(data, 'initials', 3).upper()
         answer = field(data, 'security_answer', 256)
-        new_password = field(data, 'new_password', 256)
+        new_password = field(data, 'new_password', 256, trim=False)
         if len(new_password) < 10:
             abort(400, description='Use a password of at least 10 characters.')
         throttle(initials)
@@ -298,7 +299,7 @@ def register_tasks(app, socketio, get_db, postgres=False):
             run('DELETE FROM task_sessions WHERE initials=?', (initials,))
             run('UPDATE task_accounts SET password_hash=? WHERE initials=?',
                 (generate_password_hash(new_password), initials))
-        return session_response(initials)
+        return jsonify(status='reset')
 
     @bp.post('/api/tasks/logout')
     @bp.post('/api/auth/logout')
@@ -311,6 +312,7 @@ def register_tasks(app, socketio, get_db, postgres=False):
         return response
 
     @bp.get('/api/tasks')
+    @authenticated
     def list_tasks():
         with database() as run:
             rows = [dict(r) for r in run('''SELECT * FROM tasks ORDER BY
@@ -319,7 +321,8 @@ def register_tasks(app, socketio, get_db, postgres=False):
         participants = {}
         hidden = set()
         for row in participant_rows:
-            participants.setdefault(row['task_id'], []).append(row['initials'])
+            if not row['hidden']:
+                participants.setdefault(row['task_id'], []).append(row['initials'])
             if g.task_user and row['initials'] == g.task_user and row['hidden']:
                 hidden.add(row['task_id'])
         visible_rows = []
@@ -345,9 +348,12 @@ def register_tasks(app, socketio, get_db, postgres=False):
         return values
 
     def save_participants(run, task_id, values):
-        run('DELETE FROM task_participants WHERE task_id=?', (task_id,))
+        old = run('SELECT initials FROM task_participants WHERE task_id=?', (task_id,)).fetchall()
+        for row in old:
+            if row['initials'] not in values:
+                run('DELETE FROM task_participants WHERE task_id=? AND initials=?', (task_id, row['initials']))
         for value in values:
-            run('INSERT INTO task_participants (task_id, initials) VALUES (?, ?)', (task_id, value))
+            run('INSERT INTO task_participants (task_id, initials) VALUES (?, ?) ON CONFLICT(task_id, initials) DO NOTHING', (task_id, value))
 
     def assignee_value(run, value):
         if value in (None, ''):
@@ -404,7 +410,10 @@ def register_tasks(app, socketio, get_db, postgres=False):
                 position = next_position(run)
             run('''UPDATE tasks SET title=?, deadline=?, assignee=?, position=?, version=version+1 WHERE id=?''',
                 (title, deadline, assignee, position, task_id))
-            save_participants(run, task_id, participant_values(run, data.get('participants'), assignee))
+            if 'participants' in data:
+                save_participants(run, task_id, participant_values(run, data['participants'], assignee))
+            elif assignee:
+                run('INSERT INTO task_participants (task_id, initials) VALUES (?, ?) ON CONFLICT(task_id, initials) DO NOTHING', (task_id, assignee))
         return changed()
 
     @bp.post('/api/tasks/<task_id>/completion')
@@ -466,6 +475,7 @@ def register_tasks(app, socketio, get_db, postgres=False):
             task = load_task(run, task_id, data)
             if g.task_user not in (task['created_by'], task['assignee']):
                 abort(403, description='Only the creator or assignee can delete this task.')
+            run('DELETE FROM task_participants WHERE task_id=?', (task_id,))
             run('DELETE FROM tasks WHERE id=?', (task_id,))
         return changed()
 

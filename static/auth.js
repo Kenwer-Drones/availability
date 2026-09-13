@@ -24,6 +24,15 @@ function setMode(value) {
     $('signup-recovery').hidden = mode !== 'signup';
     $('password-label').hidden = false;
     $('password').required = true;
+    $('password').disabled = false;
+    $('password').minLength = mode === 'signup' ? 10 : 1;
+    for (const id of ['name', 'security-answer', 'timezone']) {
+        $(id).disabled = mode !== 'signup';
+        $(id).required = mode === 'signup';
+    }
+    for (const id of ['reset-answer', 'new-password']) { $(id).disabled = true; $(id).required = false; }
+    $('login-tab').hidden = false;
+    $('signup-tab').hidden = false;
     $('password').autocomplete = mode === 'signup' ? 'new-password' : 'current-password';
     $('forgot').hidden = mode !== 'login';
     $('reset-fields').hidden = true;
@@ -33,8 +42,10 @@ function setMode(value) {
 }
 function fillTimezones() {
     const zones = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : ['America/Phoenix', 'Asia/Kolkata', 'America/Los_Angeles', 'UTC'];
-    $('timezone').replaceChildren(...zones.map(zone => new Option(zone, zone)));
-    $('timezone').value = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Phoenix';
+    const detected = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Phoenix';
+    const supported = [...new Set(['America/Phoenix', detected, ...zones])];
+    $('timezone').replaceChildren(...supported.map(zone => new Option(zone, zone)));
+    $('timezone').value = detected;
 }
 async function request(path, method = 'GET', body) {
     const response = await fetch(`/api/auth${path}`, {
@@ -60,6 +71,8 @@ async function openRecovery() {
         $('signup-recovery').hidden = true;
         $('password-label').hidden = true;
         $('password').required = false;
+        $('password').disabled = true;
+        for (const id of ['reset-answer', 'new-password']) { $(id).disabled = false; $(id).required = true; }
         $('forgot').hidden = true;
         $('reset-fields').hidden = false;
         $('recovery-question').textContent = result.question;
@@ -76,13 +89,14 @@ $('cancel-recovery').onclick = () => { $('login-tab').hidden = false; $('signup-
 $('auth-form').onsubmit = async event => {
     event.preventDefault();
     const button = $('submit');
+    if (button.disabled) return;
     button.disabled = true;
     setMessage('');
     try {
         const initials = $('initials').value.trim().toUpperCase();
         if (recovery) {
             await request('/reset-password', 'POST', { initials, security_answer: $('reset-answer').value.trim(), new_password: $('new-password').value });
-            location.href = `${location.pathname}?mode=login&next=${encodeURIComponent(next)}&reset=1`;
+            location.href = `${location.pathname}?mode=login&next=${encodeURIComponent(next)}&reset=1&initials=${encodeURIComponent(initials)}`;
             return;
         }
         if (mode === 'signup') {
@@ -90,7 +104,7 @@ $('auth-form').onsubmit = async event => {
                 initials, name: $('name').value.trim(), password: $('password').value,
                 security_answer: $('security-answer').value.trim(), timezone: $('timezone').value
             });
-            location.href = `${location.pathname}?mode=login&next=${encodeURIComponent(next)}&created=1`;
+            location.href = `${location.pathname}?mode=login&next=${encodeURIComponent(next)}&created=1&initials=${encodeURIComponent(initials)}`;
             return;
         }
         await request('/login', 'POST', { initials, password: $('password').value });
@@ -104,3 +118,5 @@ fillTimezones();
 setMode(mode);
 if (params.get('created')) setMessage('Account created. Sign in to continue.', true);
 if (params.get('reset')) setMessage('Password reset. Sign in to continue.', true);
+
+$('initials').value = params.get('initials') || '';

@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO, emit
 import os
 import sqlite3
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import threading
 import time as time_module
 from datetime import datetime, timezone, timedelta
@@ -82,6 +83,7 @@ else:
     def get_db():
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
+        conn.execute('PRAGMA foreign_keys=ON')
         return conn
 
     def init_db():
@@ -197,10 +199,21 @@ def set_timezone():
     """Register a user's timezone."""
     if not get_authenticated_user():
         return jsonify({'error': 'Sign in to update your timezone.'}), 401
-    data = request.get_json()
-    initials = data.get('initials', '').strip().upper()
-    timezone = data.get('timezone', '').strip()
-    name = data.get('name', '').strip()
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify(error='Expected a JSON object.'), 400
+    initials = get_authenticated_user()
+    if data.get('initials', initials) != initials:
+        return jsonify(error='You can only change your own profile.'), 403
+    timezone = data.get('timezone')
+    name = data.get('name', '')
+    if not isinstance(timezone, str) or not isinstance(name, str) or len(name) > 60:
+        return jsonify(error='Invalid name or timezone.'), 400
+    timezone, name = timezone.strip(), name.strip()
+    try:
+        ZoneInfo(timezone)
+    except (ZoneInfoNotFoundError, ValueError):
+        return jsonify(error='Invalid timezone.'), 400
 
     if not initials or not timezone:
         return jsonify({'error': 'Missing initials or timezone'}), 400
@@ -243,11 +256,21 @@ def get_slots():
 def toggle_slot():
     if not get_authenticated_user():
         return jsonify({'error': 'Sign in to update availability.'}), 401
-    data = request.get_json()
-    date_utc = data.get('date_utc')
-    hour_utc = data.get('hour_utc')
-    initials = data.get('initials', '').strip().upper()
-    name = data.get('name', '').strip()
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify(error='Expected a JSON object.'), 400
+    initials = get_authenticated_user()
+    if data.get('initials', initials) != initials:
+        return jsonify(error='You can only change your own availability.'), 403
+    date_utc, hour_utc = data.get('date_utc'), data.get('hour_utc')
+    if type(hour_utc) is not int or not 0 <= hour_utc <= 23:
+        return jsonify(error='Hour must be an integer from 0 to 23.'), 400
+    try:
+        if not isinstance(date_utc, str) or datetime.strptime(date_utc, '%Y-%m-%d').strftime('%Y-%m-%d') != date_utc:
+            raise ValueError()
+    except ValueError:
+        return jsonify(error='Use a valid date in YYYY-MM-DD format.'), 400
+    name = get_user_directory()[initials]['name']
 
     if not date_utc or hour_utc is None or not initials:
         return jsonify({'error': 'Missing date_utc, hour_utc, or initials'}), 400
@@ -267,7 +290,8 @@ def toggle_slot():
 
 @socketio.on('connect')
 def handle_connect():
-    pass
+    if not get_authenticated_user():
+        return False
 
 
 @socketio.on('disconnect')

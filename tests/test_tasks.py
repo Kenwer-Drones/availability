@@ -35,6 +35,8 @@ class TaskBoardTests(unittest.TestCase):
             response = self.send(client, '/register', initials=initials, name=initials, password='a-long-password',
                                  security_answer='blue')
             self.assertEqual(response.status_code, 200)
+            self.assertIsNone(client.get('/api/auth/session').json['user'])
+            self.assertEqual(self.send(client, '/login', initials=initials, password='a-long-password').status_code, 200)
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -55,7 +57,7 @@ class TaskBoardTests(unittest.TestCase):
     def test_board_page_and_empty_users(self):
         self.assertEqual(self.visitor.get('/tasks').status_code, 200)
         self.assertEqual(self.tasks(), [])
-        self.assertEqual(set(self.visitor.get('/api/tasks').json['users']), {'AA', 'BB', 'CR'})
+        self.assertEqual(set(self.alice.get('/api/tasks').json['users']), {'AA', 'BB', 'CR'})
 
     def test_dedicated_auth_page_and_signup_uses_shared_flow(self):
         response = self.visitor.get('/auth?mode=signup&next=/tasks')
@@ -66,6 +68,27 @@ class TaskBoardTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(self.visitor.get('/api/auth/security-question?initials=DD').json['question'],
                          'What is your nickname?')
+
+    def test_legacy_recovery_question_is_not_relabelled(self):
+        conn = self.get_db()
+        conn.execute("UPDATE task_accounts SET security_question='Favorite color?' WHERE initials='BB'")
+        conn.commit()
+        conn.close()
+        self.assertEqual(self.visitor.get('/api/auth/security-question?initials=BB').json['question'], 'Favorite color?')
+
+    def test_signup_preserves_existing_profile_identity_and_requires_login(self):
+        self.save_profile('DD', 'Old name', 'America/Phoenix')
+        response = self.send(self.visitor, '/register', initials='DD', name='Updated name', password='long-password', security_answer='nickname', timezone='Asia/Kolkata')
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(self.visitor.get('/api/auth/session').json['user'])
+        self.assertEqual(self.directory()['DD']['name'], 'Updated name')
+        self.assertEqual(self.directory()['DD']['timezone'], 'Asia/Kolkata')
+
+    def test_hidden_participant_stays_removed_after_edit(self):
+        task = self.create(participants=['AA'])
+        self.send(self.alice, f"/{task['id']}/membership", 'DELETE', version=1)
+        self.send(self.bob, f"/{task['id']}", 'PATCH', version=1, title='Edited', assignee='BB', deadline='2026-09-15T08:00')
+        self.assertNotIn(task['id'], [t['id'] for t in self.tasks()])
 
     def test_arizona_deadline_to_utc_and_india(self):
         task = self.create()
@@ -191,7 +214,7 @@ class TaskBoardTests(unittest.TestCase):
         response = self.visitor.post('/api/auth/reset-password', headers=self.headers,
                                      json={'initials': 'BB', 'security_answer': 'BLUE', 'new_password': 'new-long-password'})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(self.visitor.get('/api/auth/session').json['user'], 'BB')
+        self.assertIsNone(self.visitor.get('/api/auth/session').json['user'])
         self.send(self.visitor, '/logout')
         self.assertEqual(self.send(self.visitor, '/login', initials='BB', password='new-long-password').status_code, 200)
         self.assertEqual(self.send(self.visitor, '/login', initials='BB', password='a-long-password').status_code, 401)
@@ -210,6 +233,7 @@ class TaskBoardTests(unittest.TestCase):
         admin = self.app.test_client()
         self.assertEqual(self.send(admin, '/register', initials='CR', name='Chiranjiva Rao', password='a-long-password',
                                     security_question='Question', security_answer='answer').status_code, 200)
+        self.send(admin, '/login', initials='CR', password='a-long-password')
         self.assertTrue(self.send(admin, '', 'GET').json['admin'])
         self.assertEqual(admin.delete('/api/admin/users/AA', headers=self.headers, json={}).status_code, 200)
         self.assertNotIn('AA', admin.get('/api/tasks', headers=self.headers).json['users'])
@@ -221,7 +245,7 @@ class TaskBoardTests(unittest.TestCase):
         app2 = Flask('restarted')
         directory, _, _ = register_tasks(app2, Mock(), self.get_db)
         self.assertEqual(directory()['IN']['timezone'], 'Asia/Kolkata')
-        self.assertEqual(len(app2.test_client().get('/api/tasks').json['tasks']), 1)
+        self.assertEqual(app2.test_client().get('/api/tasks').status_code, 401)
         self.assertEqual(app2.test_client().post('/api/tasks/login', json={'initials': 'BB', 'password': 'a-long-password'}, headers=self.headers).status_code, 200)
 
     def test_delete_permissions(self):

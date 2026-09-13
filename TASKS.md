@@ -11,12 +11,12 @@ Availability remains at `/`. The **Tasks** navigation link opens `/tasks`.
   delete the task for everyone.
 - Titles and deadlines can be edited by signed-in team members. Only the current
   assignee can reassign an assigned task, preventing a completion-permission bypass.
-- Only the assignee can complete or reopen a task. Completed tasks are available
+- Only visible participants can complete or reopen a task. Completed tasks are available
   with **Show completed** and must be reopened before editing.
 - Deadlines are entered in `America/Phoenix` (UTC-7 year round), stored in UTC,
   and displayed in Arizona time. The editor also previews the signed-in user's
   timezone. Arizona 08:00 is India 20:30 on the same date.
-- Earlier deadlines sort first; undated tasks come last. Up/down buttons change
+- Earlier deadlines sort first; undated tasks come last. Dragging cards changes
   the order within the same assignee and exact deadline, including undated tasks.
 - The creator or assignee may delete a task, with confirmation.
 
@@ -42,9 +42,11 @@ Initial account registration is self-service and first-claim, consistent with
 the existing trusted-team profile setup. It does not verify a person's real-world
 identity: coordinate initial registration with the team. Once claimed, that
 initials account cannot be claimed again. This is not an invitation-only or
-email-verified identity system. Password recovery is not yet provided; do not
-share passwords. Availability APIs and task APIs require the same authenticated
-session. Static page shells remain loadable so the sign-in dialog can be shown.
+email-verified identity system. New accounts use the fixed nickname recovery question.
+Existing recovery questions remain paired with their saved answers. Availability APIs and task APIs require the same authenticated
+session. Both page shells redirect signed-out visitors to `/auth`.
+Signup saves the account without issuing a login session, then redirects to sign-in.
+Password resets revoke previous sessions and also return to sign-in.
 
 ## Persistence And Deployment
 
@@ -75,6 +77,7 @@ With Playwright and Chromium installed:
 
 ```sh
 node tests/tasks_browser.cjs
+node tests/auth_browser.cjs
 ```
 
 Browser tests start a temporary local server/database and clean them up on exit.

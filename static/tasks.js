@@ -5,8 +5,6 @@ const ARIZONA = 'America/Phoenix';
 let boardState = { tasks: [], users: {}, user: null };
 let editing = null;
 let deleting = null;
-let registering = false;
-let recovering = false;
 let busy = false;
 let refreshSequence = 0;
 let draggedTaskId = null;
@@ -79,6 +77,7 @@ async function refresh() {
     try {
         const state = await api();
         if (sequence !== refreshSequence) return;
+        if (!state.user) { openAccount(); return; }
         boardState = state;
         $('board').setAttribute('aria-busy', 'false');
         render();
@@ -257,59 +256,7 @@ async function mutate(path, method, data) {
     catch (error) { notice(error.message); }
     finally { busy = false; await refresh(); }
 }
-function openAccount() {
-    $('auth-initials').value = localStorage.getItem('userInitials') || '';
-    $('auth-name').value = localStorage.getItem('userName') || '';
-    $('auth-password').value = '';
-    $('auth-error').textContent = '';
-    setAuthMode(false);
-    $('account-dialog').showModal();
-}
-function setAuthMode(mode) {
-    registering = mode;
-    recovering = false;
-    $('auth-tabs')?.removeAttribute('hidden');
-    $('password-field').hidden = false;
-    $('forgot-password').hidden = mode;
-    $('recovery-fields').hidden = true;
-    $('register-recovery-fields').hidden = !mode;
-    $('auth-security-answer-create').required = mode;
-    $('auth-password').required = true;
-    $('name-field').hidden = !mode;
-    $('auth-name').required = mode;
-    $('register-note').hidden = !mode;
-    $('auth-password').minLength = mode ? 10 : 1;
-    $('auth-password').autocomplete = mode ? 'new-password' : 'current-password';
-    $('account-title').textContent = mode ? 'Create task account' : 'Sign in to tasks';
-    $('auth-submit').textContent = mode ? 'Create account' : 'Sign in';
-    $('login-tab').setAttribute('aria-pressed', String(!mode));
-    $('register-tab').setAttribute('aria-pressed', String(mode));
-    $('auth-error').textContent = '';
-}
-async function openRecovery() {
-    const initials = $('auth-initials').value.trim().toUpperCase();
-    if (!/^[A-Z]{2,3}$/.test(initials)) {
-        $('auth-error').textContent = 'Enter your initials first.';
-        return;
-    }
-    try {
-        const result = await api(`/security-question?initials=${encodeURIComponent(initials)}`);
-        recovering = true;
-        $('auth-tabs').hidden = true;
-        $('name-field').hidden = true;
-        $('password-field').hidden = true;
-        $('forgot-password').hidden = true;
-        $('register-note').hidden = true;
-        $('recovery-fields').hidden = false;
-        $('recovery-question').textContent = result.question;
-        $('auth-security-answer').value = '';
-        $('auth-new-password').value = '';
-        $('auth-submit').textContent = 'Reset password';
-        $('account-title').textContent = 'Reset your password';
-        $('auth-error').textContent = '';
-        $('auth-new-password').focus();
-    } catch (error) { $('auth-error').textContent = error.message; }
-}
+function openAccount() { location.assign('/auth?next=/tasks'); }
 function openTask(task = null, assignee = boardState.user) {
     if (!boardState.user) { openAccount(); return; }
     editing = task;
@@ -357,21 +304,6 @@ function submitForm(formId, errorId, action) {
         finally { submit.disabled = false; }
     });
 }
-submitForm('account-form', 'auth-error', async () => {
-    if (recovering) {
-        await api('/reset-password', 'POST', {
-            initials: $('auth-initials').value, security_answer: $('auth-security-answer').value,
-            new_password: $('auth-new-password').value
-        });
-    } else await api(registering ? '/register' : '/login', 'POST', {
-        initials: $('auth-initials').value, name: $('auth-name').value,
-        password: $('auth-password').value, timezone: localStorage.getItem('userTimezone') || ARIZONA,
-        security_answer: $('auth-security-answer-create')?.value || ''
-    });
-    $('auth-password').value = '';
-    $('account-dialog').close();
-    await refresh();
-});
 submitForm('task-form', 'task-error', async () => {
     await api(editing ? `/${editing.id}` : '', editing ? 'PATCH' : 'POST', {
         title: $('task-title').value, assignee: $('task-assignee').value || null,
@@ -410,9 +342,6 @@ $('account-button').onclick = async () => {
     if (!boardState.user) { window.location.href = '/auth?next=/tasks'; return; }
     try { await api('/logout', 'POST', {}); await refresh(); } catch (error) { notice(error.message); }
 };
-$('login-tab').onclick = () => setAuthMode(false);
-$('register-tab').onclick = () => setAuthMode(true);
-$('forgot-password').onclick = openRecovery;
 $('add-task').onclick = () => openTask();
 $('admin-people').onclick = () => { renderPeople(); $('people-dialog').showModal(); };
 $('search').oninput = render;
