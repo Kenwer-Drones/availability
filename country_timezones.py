@@ -60,3 +60,19 @@ def timezone_options():
         hours, remainder = divmod(abs(minutes), 60)
         result.append({'value': zone, 'label': f'{place} (UTC{sign}{hours:02d}:{remainder:02d})'})
     return result + [{'value': 'UTC', 'label': 'Worldwide — UTC (UTC+00:00)'}]
+
+def infer_timezone(city, country):
+    from geopy.geocoders import Nominatim
+    from timezonefinder import TimezoneFinder
+
+    geolocator = Nominatim(user_agent="kenwer_drones")
+    location = geolocator.geocode(f"{city}, {country}")
+    if not location:
+        raise ValueError(f"Could not find location for {city}, {country}")
+
+    tf = TimezoneFinder()
+    zone = tf.timezone_at(lng=location.longitude, lat=location.latitude)
+    if not zone:
+        raise ValueError(f"Could not determine timezone for {city}, {country}")
+
+    return normalize_timezone(zone)

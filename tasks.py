@@ -244,9 +244,24 @@ def register_tasks(app, socketio, get_db, postgres=False):
         if len(password) < 10:
             abort(400, description='Use a password of at least 10 characters.')
         security_answer = field(data, 'security_answer', 256)
-        tz = field(data, 'timezone', 100, required=False) or 'America/Phoenix'
+        city = field(data, 'city', 100, required=False)
+        country = field(data, 'country', 100, required=False)
+        tz = data.get('timezone')
+
         try:
-            tz = normalize_timezone(tz)
+            if tz:
+                tz = normalize_timezone(tz)
+            elif city and country:
+                try:
+                    from country_timezones import infer_timezone
+                    tz = infer_timezone(city, country)
+                except Exception as e:
+                    # fallback to a default timezone or raise a specific error
+                    # if the network fails. Geopy handles its own errors which inherit from GeopyError
+                    # but we catch Exception to be safe from anything failing in resolution.
+                    abort(400, description=f"Could not determine timezone for {city}, {country}. Error: {str(e)}")
+            else:
+                tz = 'America/Phoenix'
         except ValueError as error:
             abort(400, description=str(error))
         throttle(initials)

@@ -272,9 +272,13 @@ function openTask(task = null, assignee = boardState.user) {
     $('task-participants').replaceChildren();
     const selectedParticipants = new Set(task?.participants || []);
     Object.keys(boardState.users).sort().forEach(initials => {
-        const option = new Option(`${boardState.users[initials].name || initials} (${initials})`, initials);
-        option.selected = selectedParticipants.has(initials);
-        $('task-participants').add(option);
+        const label = document.createElement('label');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.value = initials;
+        checkbox.checked = selectedParticipants.has(initials);
+        label.append(checkbox, `${boardState.users[initials].name || initials} (${initials})`);
+        $('task-participants').append(label);
     });
     $('task-assignee').disabled = !!task?.assignee && task.assignee !== boardState.user;
     $('assignee-note').hidden = !$('task-assignee').disabled;
@@ -307,7 +311,7 @@ function submitForm(formId, errorId, action) {
 submitForm('task-form', 'task-error', async () => {
     await api(editing ? `/${editing.id}` : '', editing ? 'PATCH' : 'POST', {
         title: $('task-title').value, assignee: $('task-assignee').value || null,
-        participants: Array.from($('task-participants').selectedOptions).map(option => option.value),
+        participants: Array.from(document.querySelectorAll('#task-participants input:checked')).map(el => el.value),
         deadline: $('task-deadline').value || null, ...(editing ? { version: editing.version } : {})
     });
     $('task-dialog').close();
