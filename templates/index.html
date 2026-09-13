@@ -841,10 +841,14 @@
             const userInitials = getInitials();
             const minStr = String(startMinute).padStart(2, '0');
 
+            function formatSlotTime(hour) {
+                const hour12 = hour === 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+                const ampm = hour < 12 ? 'AM' : 'PM';
+                return `${hour12}:${minStr} ${ampm}`;
+            }
+
             for (let h = 0; h < 24; h++) {
-                const hour12 = h === 0 ? 12 : (h > 12 ? h - 12 : h);
-                const ampm = h < 12 ? 'AM' : 'PM';
-                const label = `${hour12}:${minStr} ${ampm}`;
+                const label = `${formatSlotTime(h)} - ${formatSlotTime((h + 1) % 24)}`;
                 const people = localSlots[h] || [];
                 const isSelected = people.some(p => p.initials === userInitials);
                 const pastHour = isHourPast(localDateStr, h);
@@ -875,7 +879,7 @@
                 html += `<div class="summary-section"><div class="summary-title">Availability Summary</div>`;
                 Object.keys(peopleSummary).sort().forEach(initials => {
                     const info = peopleSummary[initials];
-                    html += `<div class="summary-person"><div class="summary-person-name">${info.name} (${initials})</div><div class="summary-person-hours">${info.count} hour${info.count !== 1 ? 's' : ''}</div></div>`;
+                    html += `<div class="summary-person"><div class="summary-person-name">${info.name} (${initials})</div><div class="summary-person-hours">${info.count} / 7 hours</div></div>`;
                 });
                 html += `</div>`;
             }
