@@ -76,14 +76,25 @@
 
         .user-setup select {
             padding: 4px 8px;
-            border: 1px solid #ccc;
+            border: 1px solid var(--current-user-border, #ccc);
             border-radius: 4px;
+            background: var(--current-user-bg, #fff);
+            color: var(--current-user-text, #333);
             font-size: 12px;
+            font-weight: 600;
+        }
+
+        .user-setup select option:checked,
+        .setup-box select option:checked {
+            background: linear-gradient(var(--current-user-bg, #e8f0fe), var(--current-user-bg, #e8f0fe));
+            color: var(--current-user-text, #1a4f9c);
+            font-weight: 700;
         }
 
         .user-setup select option.tz-active {
-            background: #e8f0fe;
-            font-weight: 600;
+            background: var(--current-user-bg, #e8f0fe);
+            color: var(--current-user-text, #1a4f9c);
+            font-weight: 700;
         }
 
         .timezone-team {
@@ -558,32 +569,51 @@
         const STANDARD_TIMEZONE = 'America/Phoenix';
 
         const USER_COLORS = [
-            { bg: '#fde8e8', text: '#9b1c1c', border: '#f8b4b4' },
+            { bg: '#ffedd5', text: '#9a3412', border: '#fdba74' },
             { bg: '#e1effe', text: '#1e429f', border: '#a4cafe' },
             { bg: '#fef3c7', text: '#92400e', border: '#fcd34d' },
             { bg: '#ede9fe', text: '#5b21b6', border: '#c4b5fd' },
             { bg: '#def7ec', text: '#03543f', border: '#84e1bc' },
             { bg: '#fce8f3', text: '#99154b', border: '#f8b4d9' },
             { bg: '#e0f2fe', text: '#075985', border: '#7dd3fc' },
-            { bg: '#ffedd5', text: '#9a3412', border: '#fdba74' },
+            { bg: '#fde8e8', text: '#9b1c1c', border: '#f8b4b4' },
             { bg: '#e5e7eb', text: '#374151', border: '#cbd5e1' },
             { bg: '#dcfce7', text: '#166534', border: '#86efac' },
             { bg: '#fae8ff', text: '#86198f', border: '#e879f9' },
             { bg: '#ccfbf1', text: '#115e59', border: '#5eead4' }
         ];
+        const CHIRANJIVA_COLOR = { bg: '#ffedd5', text: '#9a3412', border: '#fdba74' };
         const userColorAssignments = {};
 
-        function getColorForUser(initials) {
+        function isChiranjivaUser(initials, name = '') {
+            return initials === 'CA' || initials === 'CRA' || name.toLowerCase().includes('chiranjiva');
+        }
+
+        function getColorForUser(initials, name = '') {
+            if (isChiranjivaUser(initials, name)) {
+                userColorAssignments[initials] = CHIRANJIVA_COLOR;
+                return userColorAssignments[initials];
+            }
             if (userColorAssignments[initials]) return userColorAssignments[initials];
             const used = new Set(Object.values(userColorAssignments).map(c => c.bg));
-            const available = USER_COLORS.find(color => !used.has(color.bg)) || USER_COLORS[Object.keys(userColorAssignments).length % USER_COLORS.length];
+            const available = USER_COLORS.find(color => color.bg !== CHIRANJIVA_COLOR.bg && !used.has(color.bg)) || USER_COLORS[Object.keys(userColorAssignments).length % USER_COLORS.length];
             userColorAssignments[initials] = available;
             return userColorAssignments[initials];
         }
 
-        function getColorStyleVars(initials, prefix = 'badge') {
-            const color = getColorForUser(initials);
+        function getColorStyleVars(initials, prefix = 'badge', name = '') {
+            const color = getColorForUser(initials, name);
             return `--${prefix}-bg:${color.bg}; --${prefix}-text:${color.text}; --${prefix}-border:${color.border};`;
+        }
+
+        function setCurrentUserColorVars() {
+            const initials = getInitials();
+            const name = getUserName();
+            if (!initials) return;
+            const color = getColorForUser(initials, name);
+            document.documentElement.style.setProperty('--current-user-bg', color.bg);
+            document.documentElement.style.setProperty('--current-user-text', color.text);
+            document.documentElement.style.setProperty('--current-user-border', color.border);
         }
 
         function assignColorsFromCache() {
@@ -594,7 +624,11 @@
                     allInitials.add(p.initials);
                 }
             }
-            [...allInitials].sort().forEach(initials => getColorForUser(initials));
+            [...allInitials].sort().forEach(initials => {
+                const info = timezonesCache[initials] || {};
+                getColorForUser(initials, info.name || '');
+            });
+            setCurrentUserColorVars();
         }
 
         const TIMEZONES = [
@@ -766,7 +800,7 @@
         }
 
         function populateTimezoneSelect(selectEl, selectedValue) {
-            selectEl.innerHTML = TIMEZONES.map(tz => `<option value="${tz.value}" ${tz.value === selectedValue ? 'selected' : ''}>${tz.label}</option>`).join('');
+            selectEl.innerHTML = TIMEZONES.map(tz => `<option value="${tz.value}" class="${tz.value === selectedValue ? 'tz-active' : ''}" ${tz.value === selectedValue ? 'selected' : ''}>${tz.label}</option>`).join('');
         }
 
         function renderTimezoneTeam() {
@@ -780,7 +814,7 @@
             el.innerHTML = entries.map(([initials, info]) => {
                 const displayName = info.name || initials;
                 const tzName = getTimezoneLabel(info.timezone);
-                return `<span class="timezone-chip" style="${getColorStyleVars(initials, 'chip')}" title="${displayName} works from ${info.timezone}">${initials}<span class="tz-name">${tzName}</span></span>`;
+                return `<span class="timezone-chip" style="${getColorStyleVars(initials, 'chip', displayName)}" title="${displayName} works from ${info.timezone}">${initials}<span class="tz-name">${tzName}</span></span>`;
             }).join('');
         }
 
@@ -946,7 +980,7 @@
 
                 const badges = people.map(p => {
                     const displayName = p.name || p.initials;
-                    return `<span class="initials-badge" style="${getColorStyleVars(p.initials)}" data-name="${displayName}">${p.initials}<span class="badge-tooltip">${displayName}</span></span>`;
+                    return `<span class="initials-badge" style="${getColorStyleVars(p.initials, 'badge', displayName)}" data-name="${displayName}">${p.initials}<span class="badge-tooltip">${displayName}</span></span>`;
                 }).join('');
 
                 const classes = ['hour-btn'];
@@ -1175,6 +1209,7 @@
 
         // INITIALIZATION
         showSetupIfNeeded();
+        setCurrentUserColorVars();
         populateTimezoneSelect(tzSelect, getUserTimezone());
         fetchTimezones();
         if (isInitialsLocked()) {
