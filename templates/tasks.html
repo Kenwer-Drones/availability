@@ -36,7 +36,8 @@
             <label>Title<textarea id="task-title" required maxlength="300" rows="3" placeholder="What needs to be done?"></textarea></label>
             <label>Assigned to<select id="task-assignee"></select></label>
             <p id="assignee-note" class="muted" hidden>Only the current assignee can reassign this task.</p>
-            <label>Add people <span class="muted">(shared task)</span><select id="task-participants" multiple size="4"></select></label>
+            <label>Add people <span class="muted">(shared task)</span></label>
+            <div id="task-participants" class="participants-list"></div>
             <p class="muted">Everyone added here will see this task. Completing it completes it for everyone.</p>
             <label>Deadline <span class="muted">(Arizona time)</span><input type="datetime-local" id="task-deadline" min="1900-01-01T00:00" max="9998-12-31T23:59"></label>
             <p id="deadline-preview" class="muted"></p>

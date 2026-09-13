@@ -26,7 +26,7 @@ function setMode(value) {
     $('password').required = true;
     $('password').disabled = false;
     $('password').minLength = mode === 'signup' ? 10 : 1;
-    for (const id of ['name', 'security-answer', 'timezone']) {
+    for (const id of ['name', 'security-answer', 'city', 'country']) {
         $(id).disabled = mode !== 'signup';
         $(id).required = mode === 'signup';
     }
@@ -39,18 +39,6 @@ function setMode(value) {
     $('cancel-recovery').hidden = true;
     $('submit').textContent = mode === 'signup' ? 'Create account' : 'Sign in';
     setMessage('');
-}
-function fillTimezones() {
-    const detected = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Phoenix';
-    const canonical = zone => {
-        try { return new Intl.DateTimeFormat('en', { timeZone: zone }).resolvedOptions().timeZone; }
-        catch (_) { return null; }
-    };
-    const options = Array.from($('timezone').options);
-    // Do not offer new zones an older browser cannot render on the schedule.
-    options.forEach(option => { if (!canonical(option.value)) option.remove(); });
-    const match = options.find(option => option.isConnected && canonical(option.value) === canonical(detected));
-    $('timezone').value = match?.value || 'America/Phoenix';
 }
 async function request(path, method = 'GET', body) {
     const response = await fetch(`/api/auth${path}`, {
@@ -107,7 +95,8 @@ $('auth-form').onsubmit = async event => {
         if (mode === 'signup') {
             await request('/register', 'POST', {
                 initials, name: $('name').value.trim(), password: $('password').value,
-                security_answer: $('security-answer').value.trim(), timezone: $('timezone').value
+                security_answer: $('security-answer').value.trim(),
+                city: $('city').value.trim(), country: $('country').value.trim()
             });
             location.href = `${location.pathname}?mode=login&next=${encodeURIComponent(next)}&created=1&initials=${encodeURIComponent(initials)}`;
             return;
@@ -119,7 +108,6 @@ $('auth-form').onsubmit = async event => {
         button.disabled = false;
     }
 };
-fillTimezones();
 setMode(mode);
 if (params.get('created')) setMessage('Account created. Sign in to continue.', true);
 if (params.get('reset')) setMessage('Password reset. Sign in to continue.', true);
