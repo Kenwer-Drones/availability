@@ -177,6 +177,7 @@ class TaskBoardTests(unittest.TestCase):
         response = self.visitor.get('/api/auth/security-question?initials=BB', headers=self.headers)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json['question'], 'What is your favorite color?')
+        self.assertEqual(self.visitor.get('/api/tasks/security-question?initials=BB', headers=self.headers).status_code, 200)
         response = self.visitor.post('/api/auth/reset-password', headers=self.headers,
                                      json={'initials': 'BB', 'security_answer': 'BLUE', 'new_password': 'new-long-password'})
         self.assertEqual(response.status_code, 200)
@@ -184,6 +185,25 @@ class TaskBoardTests(unittest.TestCase):
         self.send(self.visitor, '/logout')
         self.assertEqual(self.send(self.visitor, '/login', initials='BB', password='new-long-password').status_code, 200)
         self.assertEqual(self.send(self.visitor, '/login', initials='BB', password='a-long-password').status_code, 401)
+
+    def test_shared_task_completion_and_personal_removal(self):
+        task = self.create(assignee='BB', participants=['AA'])
+        self.assertIn(task['id'], [item['id'] for item in self.tasks()])
+        self.assertIn('AA', next(item for item in self.tasks() if item['id'] == task['id'])['participants'])
+        self.assertEqual(self.send(self.alice, f"/{task['id']}/membership", 'DELETE', version=1).status_code, 200)
+        self.assertNotIn(task['id'], [item['id'] for item in self.tasks()])
+        self.assertIn(task['id'], [item['id'] for item in self.send(self.bob, '', 'GET').json['tasks']])
+        shared = next(item for item in self.send(self.bob, '', 'GET').json['tasks'] if item['id'] == task['id'])
+        self.assertEqual(self.send(self.bob, f"/{task['id']}/completion", version=shared['version'], completed=True).status_code, 200)
+
+    def test_cr_is_admin_and_can_delete_people(self):
+        admin = self.app.test_client()
+        self.assertEqual(self.send(admin, '/register', initials='CR', name='Chiranjiva Rao', password='a-long-password',
+                                    security_question='Question', security_answer='answer').status_code, 200)
+        self.assertTrue(self.send(admin, '', 'GET').json['admin'])
+        self.assertEqual(admin.delete('/api/admin/users/AA', headers=self.headers, json={}).status_code, 200)
+        self.assertNotIn('AA', admin.get('/api/tasks', headers=self.headers).json['users'])
+        self.assertEqual(self.send(self.alice, title='No longer available').status_code, 401)
 
     def test_persistence_after_app_restart(self):
         self.create()

@@ -544,6 +544,7 @@
                 <summary id="timezone-team-summary">Team time zones</summary>
                 <div class="timezone-team-list" id="timezone-team-list"></div>
             </details>
+            <button id="admin-people" style="display:none;">Manage people</button>
             <button class="btn-reset" id="btn-reset-user" style="display:none;">Sign out</button>
         </div>
     </header>
@@ -950,6 +951,7 @@
                     setUserTimezone(session.profile.timezone || STANDARD_TIMEZONE);
                     document.getElementById('setup-overlay').style.display = 'none';
                     document.getElementById('user-display').textContent = `Logged in as: ${session.profile.name || session.user} (${session.user})`;
+                    document.getElementById('admin-people').style.display = session.user === 'CR' ? 'inline-block' : 'none';
                     document.getElementById('btn-reset-user').style.display = 'inline-block';
                     return true;
                 }
@@ -1032,6 +1034,7 @@
         }
 
         document.getElementById('btn-reset-user').addEventListener('click', resetUser);
+        document.getElementById('admin-people').addEventListener('click', () => { window.location.href = '/tasks#people'; });
 
         const tzSelect = document.getElementById('tz-select');
         populateTimezoneSelect(tzSelect, getUserTimezone());

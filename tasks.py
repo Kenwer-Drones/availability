@@ -19,6 +19,7 @@ def register_tasks(app, socketio, get_db, postgres=False):
     attempts = {}
     attempts_lock = threading.Lock()
     cookie_name = 'task_session'
+    admin_initials = 'CR'
 
     @contextmanager
     def database(write=False):
@@ -75,11 +76,20 @@ def register_tasks(app, socketio, get_db, postgres=False):
                 deadline TEXT, position INTEGER NOT NULL DEFAULT 0,
                 completed INTEGER NOT NULL DEFAULT 0, completed_at TEXT,
                 version INTEGER NOT NULL DEFAULT 1)''')
+            run('''CREATE TABLE IF NOT EXISTS task_participants (
+                task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+                initials TEXT NOT NULL REFERENCES team_users(initials),
+                hidden INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (task_id, initials))''')
             run('CREATE INDEX IF NOT EXISTS tasks_order ON tasks(assignee, completed, deadline, position)')
             rows = run('SELECT initials, MAX(name) AS name FROM slots GROUP BY initials').fetchall()
             for row in rows:
                 run('''INSERT INTO team_users (initials, name) VALUES (?, ?)
                        ON CONFLICT(initials) DO NOTHING''', (row['initials'], row['name']))
+            run('''INSERT INTO task_participants (task_id, initials)
+                   SELECT id, assignee FROM tasks
+                   WHERE assignee IS NOT NULL
+                   ON CONFLICT(task_id, initials) DO NOTHING''')
 
     def directory():
         with database() as run:
@@ -135,7 +145,7 @@ def register_tasks(app, socketio, get_db, postgres=False):
 
     @bp.before_request
     def identity():
-        if not (request.path.startswith('/api/tasks') or request.path.startswith('/api/auth')):
+        if not (request.path.startswith('/api/tasks') or request.path.startswith('/api/auth') or request.path.startswith('/api/admin')):
             return
         if request.method not in ('GET', 'HEAD', 'OPTIONS') and request.headers.get('X-Task-Request') != '1':
             abort(403, description='Missing task request header.')
@@ -153,7 +163,7 @@ def register_tasks(app, socketio, get_db, postgres=False):
 
     @bp.after_request
     def prevent_stale_api_cache(response):
-        if request.path.startswith('/api/tasks') or request.path.startswith('/api/auth'):
+        if request.path.startswith('/api/tasks') or request.path.startswith('/api/auth') or request.path.startswith('/api/admin'):
             response.headers['Cache-Control'] = 'no-store'
         return response
 
@@ -255,6 +265,7 @@ def register_tasks(app, socketio, get_db, postgres=False):
             abort(401, description='Incorrect initials or password.')
         return session_response(initials)
 
+    @bp.get('/api/tasks/security-question')
     @bp.get('/api/auth/security-question')
     def security_question():
         initials = request.args.get('initials', '').strip().upper()
@@ -266,6 +277,7 @@ def register_tasks(app, socketio, get_db, postgres=False):
             abort(404, description='No password recovery question is set for this account.')
         return jsonify(question=row['security_question'])
 
+    @bp.post('/api/tasks/reset-password')
     @bp.post('/api/auth/reset-password')
     def reset_password():
         data = payload()
@@ -299,7 +311,39 @@ def register_tasks(app, socketio, get_db, postgres=False):
         with database() as run:
             rows = [dict(r) for r in run('''SELECT * FROM tasks ORDER BY
                 completed, deadline IS NULL, deadline, position, id''').fetchall()]
-        return jsonify(tasks=rows, users=directory(), user=g.task_user)
+            participant_rows = run('SELECT task_id, initials, hidden FROM task_participants').fetchall()
+        participants = {}
+        hidden = set()
+        for row in participant_rows:
+            participants.setdefault(row['task_id'], []).append(row['initials'])
+            if g.task_user and row['initials'] == g.task_user and row['hidden']:
+                hidden.add(row['task_id'])
+        visible_rows = []
+        for row in rows:
+            if row['id'] in hidden:
+                continue
+            row['participants'] = participants.get(row['id'], [])
+            visible_rows.append(row)
+        return jsonify(tasks=visible_rows, users=directory(), user=g.task_user,
+                       admin=g.task_user == admin_initials)
+
+    def participant_values(run, values, assignee):
+        if values is None:
+            values = []
+        if not isinstance(values, list) or any(not isinstance(value, str) for value in values):
+            abort(400, description='Participants must be a list of registered initials.')
+        values = list(dict.fromkeys(value.strip().upper() for value in values if value.strip()))
+        if assignee and assignee not in values:
+            values.insert(0, assignee)
+        for value in values:
+            if not re.fullmatch(r'[A-Z]{2,3}', value) or not run('SELECT initials FROM team_users WHERE initials=?', (value,)).fetchone():
+                abort(400, description='Choose only registered users as participants.')
+        return values
+
+    def save_participants(run, task_id, values):
+        run('DELETE FROM task_participants WHERE task_id=?', (task_id,))
+        for value in values:
+            run('INSERT INTO task_participants (task_id, initials) VALUES (?, ?)', (task_id, value))
 
     def assignee_value(run, value):
         if value in (None, ''):
@@ -323,9 +367,11 @@ def register_tasks(app, socketio, get_db, postgres=False):
         deadline = deadline_value(data.get('deadline'))
         with database(write=True) as run:
             assignee = assignee_value(run, data.get('assignee'))
+            task_id = secrets.token_hex(16)
             run('''INSERT INTO tasks (id, title, assignee, created_by, deadline, position)
                    VALUES (?, ?, ?, ?, ?, ?)''',
-                (secrets.token_hex(16), title, assignee, g.task_user, deadline, next_position(run)))
+                (task_id, title, assignee, g.task_user, deadline, next_position(run)))
+            save_participants(run, task_id, participant_values(run, data.get('participants'), assignee))
         return changed(), 201
 
     def load_task(run, task_id, data):
@@ -354,6 +400,7 @@ def register_tasks(app, socketio, get_db, postgres=False):
                 position = next_position(run)
             run('''UPDATE tasks SET title=?, deadline=?, assignee=?, position=?, version=version+1 WHERE id=?''',
                 (title, deadline, assignee, position, task_id))
+            save_participants(run, task_id, participant_values(run, data.get('participants'), assignee))
         return changed()
 
     @bp.post('/api/tasks/<task_id>/completion')
@@ -364,8 +411,10 @@ def register_tasks(app, socketio, get_db, postgres=False):
             abort(400, description='Completed must be true or false.')
         with database(write=True) as run:
             task = load_task(run, task_id, data)
-            if not task['assignee'] or task['assignee'] != g.task_user:
-                abort(403, description='Only the assigned user can complete or reopen this task.')
+            membership = run('SELECT initials FROM task_participants WHERE task_id=? AND initials=? AND hidden=0',
+                             (task_id, g.task_user)).fetchone()
+            if not membership:
+                abort(403, description='Only a visible participant can complete or reopen this task.')
             run('UPDATE tasks SET completed=?, completed_at=?, version=version+1 WHERE id=?',
                 (int(data['completed']), now() if data['completed'] else None, task_id))
         return changed()
@@ -415,6 +464,48 @@ def register_tasks(app, socketio, get_db, postgres=False):
                 abort(403, description='Only the creator or assignee can delete this task.')
             run('DELETE FROM tasks WHERE id=?', (task_id,))
         return changed()
+
+    @bp.delete('/api/tasks/<task_id>/membership')
+    @authenticated
+    def hide_task(task_id):
+        data = payload()
+        with database(write=True) as run:
+            task = load_task(run, task_id, data)
+            membership = run('SELECT initials FROM task_participants WHERE task_id=? AND initials=?',
+                             (task_id, g.task_user)).fetchone()
+            if not membership or task['assignee'] == g.task_user:
+                abort(403, description='Only an added participant can remove this task from their list.')
+            run('UPDATE task_participants SET hidden=1 WHERE task_id=? AND initials=?', (task_id, g.task_user))
+        return changed()
+
+    def admin_only(fn):
+        @wraps(fn)
+        def wrapped(*args, **kwargs):
+            if g.task_user != admin_initials:
+                abort(403, description='Only the CR administrator can manage people.')
+            return fn(*args, **kwargs)
+        return wrapped
+
+    @bp.delete('/api/admin/users/<initials>')
+    @authenticated
+    @admin_only
+    def delete_user(initials):
+        initials = initials.strip().upper()
+        if initials == admin_initials:
+            abort(400, description='The CR administrator cannot be deleted.')
+        with database(write=True) as run:
+            if not run('SELECT initials FROM team_users WHERE initials=?', (initials,)).fetchone():
+                abort(404, description='User not found.')
+            run('UPDATE tasks SET assignee=NULL WHERE assignee=?', (initials,))
+            run('UPDATE tasks SET created_by=? WHERE created_by=?', (admin_initials, initials))
+            run('DELETE FROM task_participants WHERE initials=?', (initials,))
+            run('DELETE FROM task_sessions WHERE initials=?', (initials,))
+            run('DELETE FROM task_accounts WHERE initials=?', (initials,))
+            run('DELETE FROM team_users WHERE initials=?', (initials,))
+            run('DELETE FROM slots WHERE initials=?', (initials,))
+        socketio.emit('tz_update', directory())
+        socketio.emit('task_update', {'refresh': True})
+        return jsonify(status='ok')
 
     app.register_blueprint(bp)
     initialize()

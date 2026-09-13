@@ -4,6 +4,11 @@ Availability remains at `/`. The **Tasks** navigation link opens `/tasks`.
 
 - Each registered profile has a column, including people with no tasks.
 - Any signed-in user can create tasks for themselves, another user, or Not assigned.
+- Tasks can include additional people through **Add people**. The task appears in
+  every participant's column, and completion/reopening applies to all participants.
+- An added participant can remove a shared task from their own list without
+  deleting it for the other participants. The creator or primary assignee can
+  delete the task for everyone.
 - Titles and deadlines can be edited by signed-in team members. Only the current
   assignee can reassign an assigned task, preventing a completion-permission bypass.
 - Only the assignee can complete or reopen a task. Completed tasks are available
@@ -14,6 +19,14 @@ Availability remains at `/`. The **Tasks** navigation link opens `/tasks`.
 - Earlier deadlines sort first; undated tasks come last. Up/down buttons change
   the order within the same assignee and exact deadline, including undated tasks.
 - The creator or assignee may delete a task, with confirmation.
+
+## Administration
+
+`CR` is the administrator. The shared header on both pages exposes **Manage
+people** to CR, where existing profiles can be deleted. Deleting a person
+removes their account, sessions, availability slots, and participant links;
+tasks assigned to them become unassigned and tasks they created are retained
+under CR.
 
 ## Accounts
 

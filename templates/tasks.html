@@ -12,9 +12,9 @@
 </head>
 <body>
     <header class="site-header">
-        <a class="brand" href="/"><img src="/static/icon.png" alt="" width="26" height="26">Kenwer Drones</a>
+        <h1 class="site-title"><img src="/static/icon.png" alt="" width="26" height="26">Team Availability</h1>
         <nav aria-label="Pages"><a href="/">Availability</a><a href="/tasks" aria-current="page">Tasks</a></nav>
-        <div class="account"><span id="account-name"></span><button id="account-button">Sign in</button></div>
+        <div class="account"><span id="account-name"></span><button id="admin-people" hidden>Manage people</button><button id="account-button">Sign in</button></div>
     </header>
     <main>
         <div class="board-heading"><div><h1>Team assignments</h1><p id="board-count">Loading tasks...</p></div>
@@ -59,11 +59,20 @@
             <label>Title<textarea id="task-title" required maxlength="300" rows="3" placeholder="What needs to be done?"></textarea></label>
             <label>Assigned to<select id="task-assignee"></select></label>
             <p id="assignee-note" class="muted" hidden>Only the current assignee can reassign this task.</p>
+            <label>Add people <span class="muted">(shared task)</span><select id="task-participants" multiple size="4"></select></label>
+            <p class="muted">Everyone added here will see this task. Completing it completes it for everyone.</p>
             <label>Deadline <span class="muted">(Arizona time)</span><input type="datetime-local" id="task-deadline" min="1900-01-01T00:00" max="9998-12-31T23:59"></label>
             <p id="deadline-preview" class="muted"></p>
             <p class="form-error" id="task-error" role="alert"></p>
             <div class="dialog-actions"><button type="button" class="close-dialog">Cancel</button><button class="primary" id="task-submit">Add task</button></div>
         </form>
+    </dialog>
+
+    <dialog id="people-dialog" aria-labelledby="people-title">
+        <div class="dialog-heading"><h2 id="people-title">Manage people</h2><button type="button" class="icon-button close-dialog" title="Close" aria-label="Close">&times;</button></div>
+        <p class="muted">CR administrator access. Removing a person removes them from the team directory and shared task assignments.</p>
+        <div id="people-list"></div>
+        <p class="form-error" id="people-error" role="alert"></p>
     </dialog>
 
     <dialog id="delete-dialog" aria-labelledby="delete-title">

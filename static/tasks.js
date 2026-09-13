@@ -65,6 +65,15 @@ async function api(path = '', method = 'GET', data) {
     if (!response.ok) throw new Error(result.error || `Request failed (${response.status}). Please try again.`);
     return result;
 }
+async function adminApi(path = '', method = 'GET', data) {
+    const response = await fetch(`/api/admin${path}`, {
+        method, headers: { 'Content-Type': 'application/json', 'X-Task-Request': '1' },
+        body: data === undefined ? undefined : JSON.stringify(data)
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || `Request failed (${response.status}). Please try again.`);
+    return result;
+}
 async function refresh() {
     const sequence = ++refreshSequence;
     try {
@@ -101,6 +110,7 @@ function render() {
     const state = boardState;
     $('account-name').textContent = state.user ? (state.users[state.user]?.name || state.user) : '';
     $('account-button').textContent = state.user ? 'Sign out' : 'Sign in';
+    $('admin-people').hidden = !state.admin;
     $('add-task').disabled = busy;
     const openCount = state.tasks.filter(t => !t.completed).length;
     $('board-count').textContent = `${openCount} open ${openCount === 1 ? 'task' : 'tasks'} \u00b7 ${Object.keys(state.users).length} team members`;
@@ -118,7 +128,10 @@ function render() {
         const header = element('div', 'column-heading');
         header.append(element('span', 'avatar', initials || '-'));
         header.append(element('h2', '', name + (initials === state.user ? ' (you)' : '')));
-        const tasks = visible.filter(t => t.assignee === initials);
+        const tasks = visible.filter(t => {
+            if (initials === null) return !t.assignee && !(t.participants || []).length;
+            return (t.participants || []).includes(initials) || (!(t.participants || []).length && t.assignee === initials);
+        });
         header.append(element('span', 'column-count', String(tasks.length)));
         const add = element('button', 'icon-button', '+');
         add.title = `Add task for ${name}`;
@@ -136,6 +149,11 @@ function render() {
         fragment.append(column);
     });
     $('board').replaceChildren(fragment);
+    if (state.admin && location.hash === '#people' && !$('people-dialog').open) {
+        history.replaceState(null, '', '/tasks');
+        renderPeople();
+        $('people-dialog').showModal();
+    }
     if (focusedId && focusedLabel) {
         const card = Array.from($('board').querySelectorAll('[data-task-id]')).find(el => el.dataset.taskId === focusedId);
         const control = Array.from(card?.querySelectorAll('[aria-label]') || []).find(el => el.getAttribute('aria-label') === focusedLabel);
@@ -190,8 +208,9 @@ function taskCard(task) {
     const checkbox = element('input', 'completion');
     checkbox.type = 'checkbox';
     checkbox.checked = !!task.completed;
-    checkbox.disabled = busy || !boardState.user || task.assignee !== boardState.user;
-    checkbox.title = task.assignee === boardState.user ? (task.completed ? 'Reopen task' : 'Complete task') : 'Only the assigned user can complete this task';
+    const isParticipant = (task.participants || []).includes(boardState.user) || (!(task.participants || []).length && task.assignee === boardState.user);
+    checkbox.disabled = busy || !boardState.user || !isParticipant;
+    checkbox.title = isParticipant ? (task.completed ? 'Reopen shared task' : 'Complete shared task') : 'Only a task participant can complete this task';
     checkbox.setAttribute('aria-label', `${checkbox.title}: ${task.title}`);
     checkbox.onchange = () => mutate(`/${task.id}/completion`, 'POST', { version: task.version, completed: checkbox.checked });
     top.append(checkbox, element('h3', 'task-title', task.title));
@@ -205,21 +224,28 @@ function taskCard(task) {
         try { deadline.title = deadlineLabel(task.deadline, localTz); } catch (_) { /* Invalid legacy timezone: keep Arizona label. */ }
     }
     meta.append(deadline);
+    const otherParticipants = (task.participants || []).filter(initials => initials !== task.assignee).map(initials => boardState.users[initials]?.name || initials);
+    if (otherParticipants.length) meta.append(element('div', 'shared-with', `Also assigned to: ${otherParticipants.join(', ')}`));
     card.append(meta);
     const footer = element('div', 'task-footer');
     const order = element('div', 'task-tools');
     if (!task.completed) order.append(element('span', 'drag-hint', 'Drag to reorder'));
     const actions = element('div', 'task-tools');
     if (!task.completed) actions.append(tool('edit', 'Edit task', () => openTask(task), !boardState.user));
-    if (boardState.user && [task.assignee, task.created_by].includes(boardState.user)) actions.append(tool('trash', 'Delete task', () => {
+    if (boardState.user && [task.assignee, task.created_by].includes(boardState.user)) actions.append(tool('trash', 'Delete task for everyone', () => {
         deleting = task;
         $('delete-name').textContent = task.title;
         $('delete-error').textContent = '';
         $('delete-dialog').showModal();
     }));
+    else if (boardState.user && (task.participants || []).includes(boardState.user)) actions.append(tool('trash', 'Remove task from my list', () => removeFromMyList(task)));
     footer.append(order, actions);
     card.append(footer);
     return card;
+}
+async function removeFromMyList(task) {
+    if (!confirm('Remove this shared task from your list? It will remain visible to the other participants.')) return;
+    await mutate(`/${task.id}/membership`, 'DELETE', { version: task.version });
 }
 async function mutate(path, method, data) {
     if (busy) return;
@@ -296,6 +322,13 @@ function openTask(task = null, assignee = boardState.user) {
         $('task-assignee').add(new Option(`${boardState.users[initials].name || initials} (${initials})`, initials));
     });
     $('task-assignee').value = (task ? task.assignee : assignee) || '';
+    $('task-participants').replaceChildren();
+    const selectedParticipants = new Set(task?.participants || []);
+    Object.keys(boardState.users).sort().forEach(initials => {
+        const option = new Option(`${boardState.users[initials].name || initials} (${initials})`, initials);
+        option.selected = selectedParticipants.has(initials);
+        $('task-participants').add(option);
+    });
     $('task-assignee').disabled = !!task?.assignee && task.assignee !== boardState.user;
     $('assignee-note').hidden = !$('task-assignee').disabled;
     $('task-deadline').value = arizonaInput(task?.deadline);
@@ -343,6 +376,7 @@ submitForm('account-form', 'auth-error', async () => {
 submitForm('task-form', 'task-error', async () => {
     await api(editing ? `/${editing.id}` : '', editing ? 'PATCH' : 'POST', {
         title: $('task-title').value, assignee: $('task-assignee').value || null,
+        participants: Array.from($('task-participants').selectedOptions).map(option => option.value),
         deadline: $('task-deadline').value || null, ...(editing ? { version: editing.version } : {})
     });
     $('task-dialog').close();
@@ -353,6 +387,26 @@ submitForm('delete-form', 'delete-error', async () => {
     $('delete-dialog').close();
     await refresh();
 });
+function renderPeople() {
+    const list = $('people-list');
+    list.replaceChildren();
+    $('people-error').textContent = '';
+    Object.keys(boardState.users).sort().forEach(initials => {
+        const row = element('div', 'person-row');
+        row.append(element('strong', '', `${boardState.users[initials].name || initials} (${initials})`));
+        if (initials === 'CR') row.append(element('span', 'muted', 'Administrator'));
+        else {
+            const remove = element('button', 'danger', 'Delete');
+            remove.onclick = async () => {
+                if (!confirm(`Delete ${boardState.users[initials].name || initials} from the team?`)) return;
+                try { await adminApi(`/users/${initials}`, 'DELETE', {}); $('people-dialog').close(); await refresh(); }
+                catch (error) { $('people-error').textContent = error.message; }
+            };
+            row.append(remove);
+        }
+        list.append(row);
+    });
+}
 $('account-button').onclick = async () => {
     if (!boardState.user) { openAccount(); return; }
     try { await api('/logout', 'POST', {}); await refresh(); } catch (error) { notice(error.message); }
@@ -361,6 +415,7 @@ $('login-tab').onclick = () => setAuthMode(false);
 $('register-tab').onclick = () => setAuthMode(true);
 $('forgot-password').onclick = openRecovery;
 $('add-task').onclick = () => openTask();
+$('admin-people').onclick = () => { renderPeople(); $('people-dialog').showModal(); };
 $('search').oninput = render;
 $('show-completed').onchange = render;
 $('task-deadline').oninput = previewDeadline;
