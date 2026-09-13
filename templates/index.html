@@ -152,7 +152,10 @@
             display: flex;
             flex: 1;
             overflow: hidden;
+            visibility: hidden;
         }
+
+        body.ready .main-container { visibility: visible; }
 
         .dates-panel {
             width: 140px;
@@ -233,7 +236,6 @@
         }
 
         .availability-settings .timezone-team { max-width: none; }
-        .initial-loading { visibility: hidden; }
 
         .schedule-header {
             font-size: 16px;
@@ -568,7 +570,6 @@
                 <label for="tz-select">Country / timezone:</label>
                 <select id="tz-select"></select>
             </div>
-            <p class="initial-loading" style="color:#aaa; font-size:13px;">Select a date to view/edit availability</p>
         </div>
     </div>
 
@@ -829,6 +830,7 @@
             renderTimezoneTeam();
             registerTimezone(getInitials(), getUserName(), getUserTimezone());
             renderDatesPanel();
+            document.body.classList.add('ready');
         }
 
         document.getElementById('btn-reset-user').addEventListener('click', resetUser);
