@@ -228,8 +228,6 @@ function taskCard(task) {
     if (otherParticipants.length) meta.append(element('div', 'shared-with', `Also assigned to: ${otherParticipants.join(', ')}`));
     card.append(meta);
     const footer = element('div', 'task-footer');
-    const order = element('div', 'task-tools');
-    if (!task.completed) order.append(element('span', 'drag-hint', 'Drag to reorder'));
     const actions = element('div', 'task-tools');
     if (!task.completed) actions.append(tool('edit', 'Edit task', () => openTask(task), !boardState.user));
     if (boardState.user && [task.assignee, task.created_by].includes(boardState.user)) actions.append(tool('trash', 'Delete task for everyone', () => {
@@ -239,7 +237,7 @@ function taskCard(task) {
         $('delete-dialog').showModal();
     }));
     else if (boardState.user && (task.participants || []).includes(boardState.user)) actions.append(tool('trash', 'Remove task from my list', () => removeFromMyList(task)));
-    footer.append(order, actions);
+    footer.append(actions);
     card.append(footer);
     return card;
 }
