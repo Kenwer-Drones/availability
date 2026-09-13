@@ -105,6 +105,7 @@
         }
 
         .timezone-team summary { cursor: pointer; list-style: none; color: #555; font-size: 12px; padding: 5px 8px; border: 1px solid #ddd; border-radius: 14px; background: #fff; }
+        .site-header .timezone-team summary { font-size: 11px; padding: 4px 7px; }
         .timezone-team summary::-webkit-details-marker { display: none; }
         .timezone-team summary::after { content: ' v'; color: #777; }
         .timezone-team[open] summary::after { content: ' ^'; }
@@ -232,6 +233,7 @@
         }
 
         .availability-settings .timezone-team { max-width: none; }
+        .initial-loading { visibility: hidden; }
 
         .schedule-header {
             font-size: 16px;
@@ -550,6 +552,10 @@
         <nav class="page-nav" aria-label="Pages"><a href="/" aria-current="page">Availability</a><a href="/tasks">Tasks</a></nav>
         <div class="account user-setup">
             <span id="user-display" style="font-size:13px; color:#333;"></span>
+            <details class="timezone-team" id="timezone-team">
+                <summary id="timezone-team-summary">Team time zones</summary>
+                <div class="timezone-team-list" id="timezone-team-list"></div>
+            </details>
             <button id="admin-people" style="display:none;">Manage people</button>
             <button class="btn-reset" id="btn-reset-user" style="display:none;">Sign out</button>
         </div>
@@ -561,12 +567,8 @@
             <div class="availability-settings">
                 <label for="tz-select">Country / timezone:</label>
                 <select id="tz-select"></select>
-                <details class="timezone-team" id="timezone-team">
-                    <summary id="timezone-team-summary">Team time zones</summary>
-                    <div class="timezone-team-list" id="timezone-team-list"></div>
-                </details>
             </div>
-            <p style="color:#aaa; font-size:13px;">Select a date to view/edit availability</p>
+            <p class="initial-loading" style="color:#aaa; font-size:13px;">Select a date to view/edit availability</p>
         </div>
     </div>
 
