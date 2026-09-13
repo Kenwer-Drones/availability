@@ -152,10 +152,7 @@
             display: flex;
             flex: 1;
             overflow: hidden;
-            visibility: hidden;
         }
-
-        body.ready .main-container { visibility: visible; }
 
         .dates-panel {
             width: 140px;
@@ -787,8 +784,12 @@
 
         async function fetchTimezones() {
             try {
-                const res = await fetch('/api/timezones', { cache: 'no-store' });
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 8000);
+                const res = await fetch('/api/timezones', { cache: 'no-store', signal: controller.signal });
+                clearTimeout(timeout);
                 if (res.status === 401) return;
+                if (!res.ok) throw new Error(`Timezone request failed (${res.status})`);
                 timezonesCache = await res.json();
                 assignColorsFromCache();
                 setCurrentUserColorVars();
@@ -822,15 +823,19 @@
 
         async function initializeAvailability() {
             if (!await showSetupIfNeeded()) return;
-            const tzSelect = document.getElementById('tz-select');
-            populateTimezoneSelect(tzSelect, getUserTimezone());
-            await fetchTimezones();
-            timezonesCache[getInitials()] = { timezone: getUserTimezone(), name: getUserName() };
-            assignColorsFromCache();
-            renderTimezoneTeam();
-            registerTimezone(getInitials(), getUserName(), getUserTimezone());
-            renderDatesPanel();
-            document.body.classList.add('ready');
+            try {
+                const tzSelect = document.getElementById('tz-select');
+                populateTimezoneSelect(tzSelect, getUserTimezone());
+                await fetchTimezones();
+                timezonesCache[getInitials()] = { timezone: getUserTimezone(), name: getUserName() };
+                assignColorsFromCache();
+                renderTimezoneTeam();
+                registerTimezone(getInitials(), getUserName(), getUserTimezone());
+                renderDatesPanel();
+            } finally {
+                // Never leave the application hidden when a non-essential startup request fails.
+                document.body.classList.add('ready');
+            }
         }
 
         document.getElementById('btn-reset-user').addEventListener('click', resetUser);
