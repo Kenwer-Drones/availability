@@ -103,6 +103,30 @@ function deadlineLabel(iso, tz = ARIZONA) {
         hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
     }).format(new Date(iso));
 }
+function arizonaDate(iso) {
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: ARIZONA, year: 'numeric', month: '2-digit', day: '2-digit'
+    }).format(new Date(iso));
+}
+function dateAgeInDays(iso) {
+    if (!iso) return 0;
+    const today = arizonaDate(new Date().toISOString());
+    const deadlineDay = arizonaDate(iso);
+    const [todayYear, todayMonth, todayDay] = today.split('-').map(Number);
+    const [deadlineYear, deadlineMonth, deadlineDayNumber] = deadlineDay.split('-').map(Number);
+    const todayUtc = Date.UTC(todayYear, todayMonth - 1, todayDay);
+    const deadlineUtc = Date.UTC(deadlineYear, deadlineMonth - 1, deadlineDayNumber);
+    return Math.round((todayUtc - deadlineUtc) / 86400000);
+}
+function shadeHex(hex, steps) {
+    const value = hex.replace('#', '');
+    const channels = [0, 2, 4].map(index => parseInt(value.slice(index, index + 2), 16));
+    const amount = Math.max(-56, Math.min(56, steps * 8));
+    const adjusted = channels.map(channel => Math.max(0, Math.min(255,
+        Math.round(channel + (amount < 0 ? amount : (255 - channel) * amount / 255))
+    )));
+    return '#' + adjusted.map(channel => channel.toString(16).padStart(2, '0')).join('');
+}
 function render() {
     const focusedCard = document.activeElement?.closest('[data-task-id]');
     const focusedLabel = document.activeElement?.getAttribute('aria-label');
@@ -163,9 +187,12 @@ function render() {
 function taskCard(task) {
     const card = element('article', `task-card${task.completed ? ' completed' : ''}`);
     const assigneeColor = boardState.users[task.assignee] ? getColors()[task.assignee] : null;
+    const age = dateAgeInDays(task.deadline);
     if (assigneeColor) {
-        card.style.setProperty('--task-bg', assigneeColor[0]);
-        card.style.setProperty('--task-border', assigneeColor[2]);
+        // Keep each user's base color, then shift it one shade per day from today.
+        // Positive age means the deadline is in the past, so it becomes darker.
+        card.style.setProperty('--task-bg', shadeHex(assigneeColor[0], age));
+        card.style.setProperty('--task-border', shadeHex(assigneeColor[2], age));
     }
     card.dataset.taskId = task.id;
     card.draggable = !task.completed && !!boardState.user;
@@ -222,7 +249,14 @@ function taskCard(task) {
     const meta = element('div', 'task-meta');
     const deadline = element('div', `deadline${task.deadline && !task.completed && new Date(task.deadline) < new Date() ? ' overdue' : ''}`);
     deadline.innerHTML = icon('calendar');
-    deadline.append(element('span', '', task.deadline ? deadlineLabel(task.deadline) : 'No deadline'));
+    const deadlineText = element('span', '', task.deadline ? deadlineLabel(task.deadline) : 'No deadline');
+    if (task.deadline && assigneeColor) {
+        // The date itself follows the same relative shade as its task card.
+        deadlineText.style.color = shadeHex(assigneeColor[1], age);
+        deadlineText.title = age > 0 ? `${age} day${age === 1 ? '' : 's'} past today` :
+            age < 0 ? `${Math.abs(age)} day${age === -1 ? '' : 's'} ahead of today` : 'Today';
+    }
+    deadline.append(deadlineText);
     if (task.deadline) {
         const localTz = boardState.users[boardState.user]?.timezone || ARIZONA;
         try { deadline.title = deadlineLabel(task.deadline, localTz); } catch (_) { /* Invalid legacy timezone: keep Arizona label. */ }
