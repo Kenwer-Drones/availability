@@ -39,7 +39,34 @@ h2 { font-size: 19px; margin: 0; }
 .task-card.drop-before { border-top: 3px solid #3367d6; }
 .task-card.drop-after { border-bottom: 3px solid #3367d6; }
 .task-card.drop-invalid { border-color: #c03932; }
-.task-card.completed { cursor: default; }
+.task-card.completed {
+    cursor: default;
+    --task-bg: #d9d6cf !important;
+    --task-border: #aaa69e !important;
+    color: #77736d;
+    box-shadow: 0 2px 6px rgb(0 0 0 / 10%);
+    filter: saturate(.25);
+}
+.task-card.completed .completion {
+    background: #c4c0b8;
+    border-color: #918d85;
+    color: #68645d;
+}
+.task-card.completed .completion:checked {
+    background: #b8b4ac;
+    border-color: #817d75;
+}
+.task-card.completed .task-title,
+.task-card.completed .task-meta,
+.task-card.completed .shared-with,
+.task-card.completed .deadline,
+.task-card.completed .task-footer {
+    color: #77736d;
+}
+.task-card.completed .task-title {
+    text-decoration: line-through;
+    text-decoration-thickness: 1.5px;
+}
 .shared-with { margin-top: 1px; color: #747982; font-size: 11px; }
 .task-top { display: flex; align-items: flex-start; gap: 8px; }
 .completion { appearance: none; display: inline-grid; place-content: center; margin: 2px 0 0; padding: 0; width: 21px; height: 21px; border-radius: 50%; border: 1px solid #a5a9af; flex-shrink: 0; color: #28784a; cursor: pointer; }
