@@ -103,28 +103,30 @@ function deadlineLabel(iso, tz = ARIZONA) {
         hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
     }).format(new Date(iso));
 }
-function arizonaDate(iso) {
-    return new Intl.DateTimeFormat('en-CA', {
-        timeZone: ARIZONA, year: 'numeric', month: '2-digit', day: '2-digit'
-    }).format(new Date(iso));
+function arizonaDateParts(iso) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: ARIZONA, year: 'numeric', month: 'numeric', day: 'numeric'
+    }).formatToParts(new Date(iso));
+    return Object.fromEntries(parts.filter(part => part.type !== 'literal')
+        .map(part => [part.type, Number(part.value)]));
 }
 function dateAgeInDays(iso) {
     if (!iso) return 0;
-    const today = arizonaDate(new Date().toISOString());
-    const deadlineDay = arizonaDate(iso);
-    const [todayYear, todayMonth, todayDay] = today.split('-').map(Number);
-    const [deadlineYear, deadlineMonth, deadlineDayNumber] = deadlineDay.split('-').map(Number);
-    const todayUtc = Date.UTC(todayYear, todayMonth - 1, todayDay);
-    const deadlineUtc = Date.UTC(deadlineYear, deadlineMonth - 1, deadlineDayNumber);
+    const today = arizonaDateParts(new Date().toISOString());
+    const deadline = arizonaDateParts(iso);
+    const todayUtc = Date.UTC(today.year, today.month - 1, today.day);
+    const deadlineUtc = Date.UTC(deadline.year, deadline.month - 1, deadline.day);
     return Math.round((todayUtc - deadlineUtc) / 86400000);
 }
 function shadeHex(hex, steps) {
     const value = hex.replace('#', '');
     const channels = [0, 2, 4].map(index => parseInt(value.slice(index, index + 2), 16));
-    const amount = Math.max(-56, Math.min(56, steps * 8));
-    const adjusted = channels.map(channel => Math.max(0, Math.min(255,
-        Math.round(channel + (amount < 0 ? amount : (255 - channel) * amount / 255))
-    )));
+    const amount = Math.max(-120, Math.min(120, steps * 18));
+    const adjusted = channels.map(channel => {
+        // Past dates darken; future dates lighten. Each day is one clear step.
+        if (amount >= 0) return Math.max(0, channel - amount);
+        return Math.min(255, channel + Math.round((255 - channel) * (-amount / 255)));
+    });
     return '#' + adjusted.map(channel => channel.toString(16).padStart(2, '0')).join('');
 }
 function render() {
