@@ -402,6 +402,25 @@ def register_tasks(app, socketio, get_db, postgres=False):
         socketio.emit('task_update', {'refresh': True})
         return jsonify(status='ok')
 
+    def save_comment(run, task_id, body):
+        if body in (None, ''):
+            return
+        body = field({'body': body}, 'body', 1000)
+        mentioned = list(dict.fromkeys(match.upper() for match in
+            re.findall(r'(?<![A-Za-z0-9_])@([A-Za-z]{2,3})(?![A-Za-z0-9_])', body)))
+        unknown = [initials for initials in mentioned if not run(
+            'SELECT initials FROM team_users WHERE initials=?', (initials,)).fetchone()]
+        if unknown:
+            abort(400, description='Unknown tagged user: ' + ', '.join('@' + value for value in unknown))
+        run('''INSERT INTO task_comments (id, task_id, author, body, created_at)
+               VALUES (?, ?, ?, ?, ?)''',
+            (secrets.token_hex(16), task_id, g.task_user, body, now()))
+        for initials in mentioned:
+            run('''INSERT INTO task_participants (task_id, initials, hidden)
+                   VALUES (?, ?, 0)
+                   ON CONFLICT(task_id, initials) DO UPDATE SET hidden=0''',
+            (task_id, initials))
+
     @bp.post('/api/tasks')
     @authenticated
     def create():
@@ -415,6 +434,7 @@ def register_tasks(app, socketio, get_db, postgres=False):
                    VALUES (?, ?, ?, ?, ?, ?)''',
                 (task_id, title, assignee, g.task_user, deadline, next_position(run)))
             save_participants(run, task_id, participant_values(run, data.get('participants'), assignee))
+            save_comment(run, task_id, data.get('comment'))
         return changed(), 201
 
     def load_task(run, task_id, data):
@@ -447,6 +467,7 @@ def register_tasks(app, socketio, get_db, postgres=False):
                 save_participants(run, task_id, participant_values(run, data['participants'], assignee))
             elif assignee:
                 run('INSERT INTO task_participants (task_id, initials) VALUES (?, ?) ON CONFLICT(task_id, initials) DO NOTHING', (task_id, assignee))
+            save_comment(run, task_id, data.get('comment'))
         return changed()
 
     @bp.post('/api/tasks/<task_id>/completion')
