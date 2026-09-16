@@ -149,7 +149,8 @@ function render() {
     const filter = $('search').value.trim().toLowerCase();
     const visible = state.tasks.filter(t => ($('show-completed').checked || !t.completed) && t.title.toLowerCase().includes(filter));
     const colors = getColors();
-    const users = Object.keys(state.users).sort((a, b) => a === state.user ? -1 : b === state.user ? 1 : a.localeCompare(b));
+    const defaultUsers = Object.keys(state.users).sort((a, b) => a === state.user ? -1 : b === state.user ? 1 : a.localeCompare(b));
+    const users = [...(state.column_order || []).filter(value => state.users[value]), ...defaultUsers.filter(value => !(state.column_order || []).includes(value))];
     const fragment = document.createDocumentFragment();
     [...users, null].forEach(initials => {
         const column = element('section', 'column');
@@ -158,6 +159,15 @@ function render() {
         const name = initials ? state.users[initials].name || initials : 'Not assigned';
         column.setAttribute('aria-label', name);
         const header = element('div', 'column-heading');
+        if (initials) {
+            header.draggable = true;
+            header.dataset.columnId = initials;
+            header.addEventListener('dragstart', event => { event.dataTransfer.setData('text/column', initials); header.classList.add('column-dragging'); });
+            header.addEventListener('dragend', () => header.classList.remove('column-dragging'));
+            header.addEventListener('dragover', event => { event.preventDefault(); header.classList.add('column-drop-target'); });
+            header.addEventListener('dragleave', () => header.classList.remove('column-drop-target'));
+            header.addEventListener('drop', async event => { event.preventDefault(); header.classList.remove('column-drop-target'); const moved = event.dataTransfer.getData('text/column'); if (!moved || moved === initials) return; const order = [...users]; const from = order.indexOf(moved); const to = order.indexOf(initials); order.splice(from, 1); order.splice(to, 0, moved); try { await api('/layout', 'POST', { order }); await refresh(); } catch (error) { notice(error.message); } });
+        }
         header.append(element('span', 'avatar', initials || '-'));
         header.append(element('h2', '', name + (initials === state.user ? ' (you)' : '')));
         const tasks = visible.filter(t => {
@@ -377,6 +387,14 @@ function drawDependencyLines() {
         const bend = Math.max(18, Math.abs(end.x - start.x) / 2);
         line.setAttribute('d', `M ${start.x} ${start.y} C ${start.x + bend} ${start.y}, ${end.x - bend} ${end.y}, ${end.x} ${end.y}`);
         line.classList.add('dependency-line');
+        line.setAttribute('tabindex', '0');
+        line.setAttribute('aria-label', 'Cut task dependency');
+        line.title = 'Click to cut this connection';
+        line.addEventListener('click', async () => {
+            if (!confirm('Cut this task connection? The main task will no longer wait for the subtask.')) return;
+            try { await api('/' + task.id + '/dependencies/' + prerequisiteId, 'DELETE', { version: task.version }); await refresh(); }
+            catch (error) { notice(error.message); }
+        });
         svg.append(line);
     }));
     if (dependencyDrag) {
