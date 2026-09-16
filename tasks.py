@@ -84,6 +84,12 @@ def register_tasks(app, socketio, get_db, postgres=False):
                 initials TEXT NOT NULL REFERENCES team_users(initials),
                 hidden INTEGER NOT NULL DEFAULT 0,
                 PRIMARY KEY (task_id, initials))''')
+            run('''CREATE TABLE IF NOT EXISTS task_dependencies (
+                task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+                prerequisite_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+                created_by TEXT NOT NULL REFERENCES task_accounts(initials),
+                PRIMARY KEY (task_id, prerequisite_id),
+                CHECK (task_id <> prerequisite_id))''')
             run('''CREATE TABLE IF NOT EXISTS task_comments (
                 id TEXT PRIMARY KEY,
                 task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
@@ -347,8 +353,10 @@ def register_tasks(app, socketio, get_db, postgres=False):
                 completed, deadline IS NULL, deadline, position, id''').fetchall()]
             participant_rows = run('SELECT task_id, initials, hidden FROM task_participants').fetchall()
             comment_rows = run('SELECT * FROM task_comments ORDER BY created_at, id').fetchall()
+            dependency_rows = run('SELECT task_id, prerequisite_id FROM task_dependencies').fetchall()
         participants = {}
         comments = {}
+        dependencies = {}
         hidden = set()
         for row in participant_rows:
             if not row['hidden']:
@@ -357,12 +365,15 @@ def register_tasks(app, socketio, get_db, postgres=False):
                 hidden.add(row['task_id'])
         for row in comment_rows:
             comments.setdefault(row['task_id'], []).append(dict(row))
+        for row in dependency_rows:
+            dependencies.setdefault(row['task_id'], []).append(row['prerequisite_id'])
         visible_rows = []
         for row in rows:
             if row['id'] in hidden:
                 continue
             row['participants'] = participants.get(row['id'], [])
             row['comments'] = comments.get(row['id'], [])
+            row['dependencies'] = dependencies.get(row['id'], [])
             visible_rows.append(row)
         return jsonify(tasks=visible_rows, users=directory(), user=g.task_user,
                        admin=g.task_user == admin_initials)
@@ -470,6 +481,45 @@ def register_tasks(app, socketio, get_db, postgres=False):
             save_comment(run, task_id, data.get('comment'))
         return changed()
 
+    @bp.post('/api/tasks/<task_id>/dependencies')
+    @authenticated
+    def add_dependency(task_id):
+        data = payload()
+        prerequisite_id = data.get('prerequisite_id')
+        if not isinstance(prerequisite_id, str) or not prerequisite_id or prerequisite_id == task_id:
+            abort(400, description='Choose a different task as the prerequisite.')
+        with database(write=True) as run:
+            task = load_task(run, task_id, data)
+            if task['completed']:
+                abort(409, description='Reopen the task before changing its dependencies.')
+            if not run('SELECT id FROM tasks WHERE id=?', (prerequisite_id,)).fetchone():
+                abort(404, description='The prerequisite task no longer exists.')
+            # Prevent circular dependency chains.
+            seen = {task_id}
+            pending = [prerequisite_id]
+            while pending:
+                current = pending.pop()
+                if current in seen:
+                    abort(409, description='That connection would create a circular task dependency.')
+                seen.add(current)
+                pending.extend(row['prerequisite_id'] for row in run(
+                    'SELECT prerequisite_id FROM task_dependencies WHERE task_id=?', (current,)).fetchall())
+            run('''INSERT INTO task_dependencies (task_id, prerequisite_id, created_by)
+                   VALUES (?, ?, ?)
+                   ON CONFLICT(task_id, prerequisite_id) DO NOTHING''',
+                (task_id, prerequisite_id, g.task_user))
+            run('UPDATE tasks SET version=version+1 WHERE id=?', (task_id,))
+        return changed(), 201
+
+    @bp.delete('/api/tasks/<task_id>/dependencies/<prerequisite_id>')
+    @authenticated
+    def remove_dependency(task_id, prerequisite_id):
+        with database(write=True) as run:
+            task = load_task(run, task_id, {'version': request.get_json(silent=True).get('version') if isinstance(request.get_json(silent=True), dict) else None})
+            run('DELETE FROM task_dependencies WHERE task_id=? AND prerequisite_id=?', (task_id, prerequisite_id))
+            run('UPDATE tasks SET version=version+1 WHERE id=?', (task_id,))
+        return changed()
+
     @bp.post('/api/tasks/<task_id>/completion')
     @authenticated
     def complete(task_id):
@@ -480,6 +530,10 @@ def register_tasks(app, socketio, get_db, postgres=False):
             task = load_task(run, task_id, data)
             membership = run('SELECT initials FROM task_participants WHERE task_id=? AND initials=? AND hidden=0',
                              (task_id, g.task_user)).fetchone()
+            blocked = run('''SELECT t.title FROM task_dependencies d JOIN tasks t ON t.id=d.prerequisite_id
+                            WHERE d.task_id=? AND t.completed=0''', (task_id,)).fetchall()
+            if blocked and data['completed']:
+                abort(409, description='Complete the linked prerequisite task(s) first: ' + ', '.join(row['title'] for row in blocked))
             if not membership:
                 abort(403, description='Only a visible participant can complete or reopen this task.')
             run('UPDATE tasks SET completed=?, completed_at=?, version=version+1 WHERE id=?',
@@ -554,6 +608,7 @@ def register_tasks(app, socketio, get_db, postgres=False):
             if g.task_user not in (task['created_by'], task['assignee']):
                 abort(403, description='Only the creator or assignee can delete this task.')
             run('DELETE FROM task_comments WHERE task_id=?', (task_id,))
+            run('DELETE FROM task_dependencies WHERE task_id=? OR prerequisite_id=?', (task_id, task_id))
             run('DELETE FROM task_participants WHERE task_id=?', (task_id,))
             run('DELETE FROM tasks WHERE id=?', (task_id,))
         return changed()
