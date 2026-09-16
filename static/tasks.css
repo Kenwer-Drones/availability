@@ -181,3 +181,9 @@ body.drawing-dependency, body.drawing-dependency * { cursor: crosshair !importan
 .dependency-handle-left, .dependency-handle-right { top: 50%; transform: translateY(-50%); }
 .dependency-handle-left { left: -8px; }
 .dependency-handle-right { right: -8px; }
+
+.dependency-line { pointer-events: stroke; cursor: scissors; }
+.dependency-line:hover, .dependency-line:focus { stroke: #c03932; stroke-width: 2.5; opacity: 1; }
+.column-heading[draggable="true"] { cursor: grab; }
+.column-heading.column-dragging { opacity: .45; }
+.column-heading.column-drop-target { outline: 2px dashed #3367d6; outline-offset: 4px; }
