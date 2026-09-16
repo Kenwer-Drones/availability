@@ -9,6 +9,7 @@ let busy = false;
 let refreshSequence = 0;
 let draggedTaskId = null;
 let dependencyDrag = null;
+let cutMode = false;
 const icons = {
     edit: '<path d="m16 3 5 5-12 12-6 1 1-6Z M14 5l5 5"/>',
     trash: '<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/>',
@@ -391,8 +392,9 @@ function drawDependencyLines() {
         line.setAttribute('aria-label', 'Cut task dependency');
         line.title = 'Click to cut this connection';
         line.addEventListener('click', async () => {
+            if (!cutMode) { notice('Click the scissors button first to cut a connection.'); return; }
             if (!confirm('Cut this task connection? The main task will no longer wait for the subtask.')) return;
-            try { await api('/' + task.id + '/dependencies/' + prerequisiteId, 'DELETE', { version: task.version }); await refresh(); }
+            try { await api('/' + task.id + '/dependencies/' + prerequisiteId, 'DELETE', { version: task.version }); cutMode = false; document.body.classList.remove('cut-mode'); $('cut-dependency').setAttribute('aria-pressed', 'false'); await refresh(); }
             catch (error) { notice(error.message); }
         });
         svg.append(line);
@@ -583,6 +585,12 @@ $('account-button').onclick = async () => {
     try { await api('/logout', 'POST', {}); await refresh(); } catch (error) { notice(error.message); }
 };
 $('add-task').onclick = () => openTask();
+$('cut-dependency').onclick = () => {
+    cutMode = !cutMode;
+    $('cut-dependency').setAttribute('aria-pressed', String(cutMode));
+    document.body.classList.toggle('cut-mode', cutMode);
+    notice(cutMode ? 'Scissors active: click a dotted connection to cut it.' : '');
+};
 $('admin-people').onclick = () => { renderPeople(); $('people-dialog').showModal(); };
 $('search').oninput = render;
 $('show-completed').onchange = render;
