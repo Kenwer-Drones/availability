@@ -88,8 +88,19 @@ def register_tasks(app, socketio, get_db, postgres=False):
                 task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
                 prerequisite_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
                 created_by TEXT NOT NULL REFERENCES task_accounts(initials),
+                source_side TEXT NOT NULL DEFAULT 'right',
+                target_side TEXT NOT NULL DEFAULT 'left',
                 PRIMARY KEY (task_id, prerequisite_id),
                 CHECK (task_id <> prerequisite_id))''')
+            if postgres:
+                run("ALTER TABLE task_dependencies ADD COLUMN IF NOT EXISTS source_side TEXT NOT NULL DEFAULT 'right'")
+                run("ALTER TABLE task_dependencies ADD COLUMN IF NOT EXISTS target_side TEXT NOT NULL DEFAULT 'left'")
+            else:
+                dependency_columns = {row['name'] for row in run('PRAGMA table_info(task_dependencies)').fetchall()}
+                if 'source_side' not in dependency_columns:
+                    run("ALTER TABLE task_dependencies ADD COLUMN source_side TEXT NOT NULL DEFAULT 'right'")
+                if 'target_side' not in dependency_columns:
+                    run("ALTER TABLE task_dependencies ADD COLUMN target_side TEXT NOT NULL DEFAULT 'left'")
             run('''CREATE TABLE IF NOT EXISTS task_comments (
                 id TEXT PRIMARY KEY,
                 task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
@@ -353,7 +364,7 @@ def register_tasks(app, socketio, get_db, postgres=False):
                 completed, deadline IS NULL, deadline, position, id''').fetchall()]
             participant_rows = run('SELECT task_id, initials, hidden FROM task_participants').fetchall()
             comment_rows = run('SELECT * FROM task_comments ORDER BY created_at, id').fetchall()
-            dependency_rows = run('SELECT task_id, prerequisite_id FROM task_dependencies').fetchall()
+            dependency_rows = run('SELECT task_id, prerequisite_id, source_side, target_side FROM task_dependencies').fetchall()
         participants = {}
         comments = {}
         dependencies = {}
@@ -366,7 +377,7 @@ def register_tasks(app, socketio, get_db, postgres=False):
         for row in comment_rows:
             comments.setdefault(row['task_id'], []).append(dict(row))
         for row in dependency_rows:
-            dependencies.setdefault(row['task_id'], []).append(row['prerequisite_id'])
+            dependencies.setdefault(row['task_id'], []).append({'task_id': row['prerequisite_id'], 'source_side': row['source_side'], 'target_side': row['target_side']})
         visible_rows = []
         for row in rows:
             if row['id'] in hidden:
@@ -486,6 +497,11 @@ def register_tasks(app, socketio, get_db, postgres=False):
     def add_dependency(task_id):
         data = payload()
         prerequisite_id = data.get('prerequisite_id')
+        source_side = data.get('source_side', 'right')
+        target_side = data.get('target_side', 'left')
+        valid_sides = {'top', 'right', 'bottom', 'left'}
+        if source_side not in valid_sides or target_side not in valid_sides:
+            abort(400, description='Choose valid connection sides.')
         if not isinstance(prerequisite_id, str) or not prerequisite_id or prerequisite_id == task_id:
             abort(400, description='Choose a different task as the prerequisite.')
         with database(write=True) as run:
@@ -507,7 +523,7 @@ def register_tasks(app, socketio, get_db, postgres=False):
             run('''INSERT INTO task_dependencies (task_id, prerequisite_id, created_by)
                    VALUES (?, ?, ?)
                    ON CONFLICT(task_id, prerequisite_id) DO NOTHING''',
-                (task_id, prerequisite_id, g.task_user))
+                (task_id, prerequisite_id, g.task_user, source_side, target_side))
             run('UPDATE tasks SET version=version+1 WHERE id=?', (task_id,))
         return changed(), 201
 
