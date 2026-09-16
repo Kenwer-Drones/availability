@@ -203,3 +203,6 @@ body.drawing-dependency, body.drawing-dependency * { cursor: crosshair !importan
 .scissors-button:hover, .scissors-button[aria-pressed="true"] { color: #b9342d; background: #fff1f0; border-color: #d99a96; }
 body.cut-mode, body.cut-mode * { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Ctext y='19' font-size='18'%3E✂%3C/text%3E%3C/svg%3E") 4 4, crosshair !important; }
 body.cut-mode .dependency-line { pointer-events: stroke; cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Ctext y='19' font-size='18'%3E✂%3C/text%3E%3C/svg%3E") 4 4, crosshair; }
+
+.dependency-line-hit { fill: none; stroke: transparent; stroke-width: 14; pointer-events: stroke; cursor: scissors; }
+.dependency-line-hover { stroke: #c03932; stroke-width: 2.5; opacity: 1; }
