@@ -84,7 +84,14 @@ def register_tasks(app, socketio, get_db, postgres=False):
                 initials TEXT NOT NULL REFERENCES team_users(initials),
                 hidden INTEGER NOT NULL DEFAULT 0,
                 PRIMARY KEY (task_id, initials))''')
+            run('''CREATE TABLE IF NOT EXISTS task_comments (
+                id TEXT PRIMARY KEY,
+                task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+                author TEXT NOT NULL,
+                body TEXT NOT NULL,
+                created_at TEXT NOT NULL)''')
             run('CREATE INDEX IF NOT EXISTS tasks_order ON tasks(assignee, completed, deadline, position)')
+            run('CREATE INDEX IF NOT EXISTS task_comments_order ON task_comments(task_id, created_at, id)')
             rows = run('SELECT initials, MAX(name) AS name FROM slots GROUP BY initials').fetchall()
             for row in rows:
                 run('''INSERT INTO team_users (initials, name) VALUES (?, ?)
@@ -339,18 +346,23 @@ def register_tasks(app, socketio, get_db, postgres=False):
             rows = [dict(r) for r in run('''SELECT * FROM tasks ORDER BY
                 completed, deadline IS NULL, deadline, position, id''').fetchall()]
             participant_rows = run('SELECT task_id, initials, hidden FROM task_participants').fetchall()
+            comment_rows = run('SELECT * FROM task_comments ORDER BY created_at, id').fetchall()
         participants = {}
+        comments = {}
         hidden = set()
         for row in participant_rows:
             if not row['hidden']:
                 participants.setdefault(row['task_id'], []).append(row['initials'])
             if g.task_user and row['initials'] == g.task_user and row['hidden']:
                 hidden.add(row['task_id'])
+        for row in comment_rows:
+            comments.setdefault(row['task_id'], []).append(dict(row))
         visible_rows = []
         for row in rows:
             if row['id'] in hidden:
                 continue
             row['participants'] = participants.get(row['id'], [])
+            row['comments'] = comments.get(row['id'], [])
             visible_rows.append(row)
         return jsonify(tasks=visible_rows, users=directory(), user=g.task_user,
                        admin=g.task_user == admin_initials)
@@ -453,6 +465,30 @@ def register_tasks(app, socketio, get_db, postgres=False):
                 (int(data['completed']), now() if data['completed'] else None, task_id))
         return changed()
 
+    @bp.post('/api/tasks/<task_id>/comments')
+    @authenticated
+    def add_comment(task_id):
+        data = payload()
+        body = field(data, 'body', 1000)
+        mentioned = list(dict.fromkeys(match.upper() for match in
+            re.findall(r'(?<![A-Za-z0-9_])@([A-Za-z]{2,3})(?![A-Za-z0-9_])', body)))
+        with database(write=True) as run:
+            if not run('SELECT id FROM tasks WHERE id=?', (task_id,)).fetchone():
+                abort(404, description='Task no longer exists.')
+            unknown = [initials for initials in mentioned if not run(
+                'SELECT initials FROM team_users WHERE initials=?', (initials,)).fetchone()]
+            if unknown:
+                abort(400, description='Unknown tagged user: ' + ', '.join('@' + value for value in unknown))
+            run('''INSERT INTO task_comments (id, task_id, author, body, created_at)
+                   VALUES (?, ?, ?, ?, ?)''',
+                (secrets.token_hex(16), task_id, g.task_user, body, now()))
+            for initials in mentioned:
+                run('''INSERT INTO task_participants (task_id, initials, hidden)
+                       VALUES (?, ?, 0)
+                       ON CONFLICT(task_id, initials) DO UPDATE SET hidden=0''',
+                    (task_id, initials))
+        return changed(), 201
+
     @bp.post('/api/tasks/<task_id>/move')
     @authenticated
     def move(task_id):
@@ -496,6 +532,7 @@ def register_tasks(app, socketio, get_db, postgres=False):
             task = load_task(run, task_id, data)
             if g.task_user not in (task['created_by'], task['assignee']):
                 abort(403, description='Only the creator or assignee can delete this task.')
+            run('DELETE FROM task_comments WHERE task_id=?', (task_id,))
             run('DELETE FROM task_participants WHERE task_id=?', (task_id,))
             run('DELETE FROM tasks WHERE id=?', (task_id,))
         return changed()

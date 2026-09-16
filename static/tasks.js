@@ -8,11 +8,13 @@ let deleting = null;
 let busy = false;
 let refreshSequence = 0;
 let draggedTaskId = null;
+const openCommentTasks = new Set();
 const icons = {
     edit: '<path d="m16 3 5 5-12 12-6 1 1-6Z M14 5l5 5"/>',
     trash: '<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/>',
     calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/>',
-    check: '<path d="m5 12 4 4L19 6"/>'
+    check: '<path d="m5 12 4 4L19 6"/>',
+    comment: '<path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z"/>'
 };
 function icon(name) {
     return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name]}</svg>`;
@@ -101,6 +103,11 @@ function deadlineLabel(iso, tz = ARIZONA) {
     return new Intl.DateTimeFormat('en-US', {
         timeZone: tz, month: 'short', day: 'numeric', year: 'numeric',
         hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
+    }).format(new Date(iso));
+}
+function commentTime(iso) {
+    return new Intl.DateTimeFormat('en-US', {
+        month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
     }).format(new Date(iso));
 }
 function arizonaDateParts(iso) {
@@ -269,6 +276,12 @@ function taskCard(task) {
     card.append(meta);
     const footer = element('div', 'task-footer');
     const actions = element('div', 'task-tools');
+    const comments = task.comments || [];
+    actions.append(tool('comment', comments.length ? `Comments (${comments.length})` : 'Add comment', () => {
+        if (openCommentTasks.has(task.id)) openCommentTasks.delete(task.id);
+        else openCommentTasks.add(task.id);
+        render();
+    }, !boardState.user));
     if (!task.completed) actions.append(tool('edit', 'Edit task', () => openTask(task), !boardState.user));
     if (boardState.user && [task.assignee, task.created_by].includes(boardState.user)) actions.append(tool('trash', 'Delete task for everyone', () => {
         deleting = task;
@@ -279,7 +292,74 @@ function taskCard(task) {
     else if (boardState.user && (task.participants || []).includes(boardState.user)) actions.append(tool('trash', 'Remove task from my list', () => removeFromMyList(task)));
     footer.append(actions);
     card.append(footer);
+    if (openCommentTasks.has(task.id)) {
+        card.classList.add('comments-open');
+        card.append(commentPanel(task));
+    }
     return card;
+}
+function commentPanel(task) {
+    const panel = element('section', 'comments-panel');
+    panel.setAttribute('aria-label', `Comments for ${task.title}`);
+    panel.draggable = false;
+    panel.addEventListener('dragstart', event => event.preventDefault());
+    const list = element('div', 'comments-list');
+    (task.comments || []).forEach(comment => {
+        const item = element('div', 'comment-item');
+        const author = boardState.users[comment.author]?.name || comment.author;
+        item.append(element('div', 'comment-meta', `${author} (${comment.author}) · ${commentTime(comment.created_at)}`));
+        item.append(commentBody(comment.body));
+        list.append(item);
+    });
+    if (!(task.comments || []).length) list.append(element('p', 'empty-comment', 'No comments yet.'));
+    panel.append(list);
+    const form = element('form', 'comment-form');
+    const input = element('textarea', 'comment-input');
+    input.required = true;
+    input.maxLength = 1000;
+    input.rows = 2;
+    input.placeholder = 'Write a comment. Tag someone with @CR';
+    input.setAttribute('aria-label', 'Write a comment');
+    const hint = element('div', 'mention-hint', `Tag: ${Object.keys(boardState.users).sort().map(value => '@' + value).join('  ')}`);
+    const error = element('p', 'form-error');
+    const submit = element('button', 'comment-submit', 'Comment');
+    submit.type = 'submit';
+    form.append(input, hint, error, submit);
+    form.addEventListener('submit', async event => {
+        event.preventDefault();
+        if (busy || !input.value.trim()) return;
+        busy = true;
+        submit.disabled = true;
+        error.textContent = '';
+        let saved = false;
+        try {
+            await api(`/${task.id}/comments`, 'POST', { body: input.value });
+            input.value = '';
+            saved = true;
+        } catch (requestError) {
+            error.textContent = requestError.message;
+        } finally {
+            busy = false;
+            submit.disabled = false;
+        }
+        if (saved) await refresh();
+    });
+    panel.append(form);
+    return panel;
+}
+function commentBody(body) {
+    const paragraph = element('p', 'comment-body');
+    const mentionPattern = /(^|[^A-Za-z0-9_])@([A-Za-z]{2,3})(?![A-Za-z0-9_])/g;
+    let cursor = 0;
+    for (const match of body.matchAll(mentionPattern)) {
+        const mentionStart = match.index + match[1].length;
+        paragraph.append(document.createTextNode(body.slice(cursor, mentionStart)));
+        const tag = element('strong', 'mention', '@' + match[2].toUpperCase());
+        paragraph.append(tag);
+        cursor = mentionStart + match[2].length + 1;
+    }
+    paragraph.append(document.createTextNode(body.slice(cursor)));
+    return paragraph;
 }
 async function removeFromMyList(task) {
     if (!confirm('Remove this shared task from your list? It will remain visible to the other participants.')) return;

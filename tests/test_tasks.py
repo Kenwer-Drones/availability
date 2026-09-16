@@ -258,6 +258,32 @@ class TaskBoardTests(unittest.TestCase):
         shared = next(item for item in self.send(self.bob, '', 'GET').json['tasks'] if item['id'] == task['id'])
         self.assertEqual(self.send(self.bob, f"/{task['id']}/completion", version=shared['version'], completed=True).status_code, 200)
 
+    def test_comments_persist_and_mentions_add_tagged_users(self):
+        task = self.create()
+        response = self.send(self.alice, f"/{task['id']}/comments", body='Please review this @aa and @CR.')
+        self.assertEqual(response.status_code, 201, response.json)
+        updated = next(item for item in self.tasks() if item['id'] == task['id'])
+        self.assertEqual(set(updated['participants']), {'AA', 'BB', 'CR'})
+        self.assertEqual(updated['comments'][0]['author'], 'AA')
+        self.assertEqual(updated['comments'][0]['body'], 'Please review this @aa and @CR.')
+        self.assertIsNotNone(updated['comments'][0]['created_at'])
+
+    def test_comment_rejects_unknown_mentions_without_saving(self):
+        task = self.create()
+        response = self.send(self.alice, f"/{task['id']}/comments", body='Can you check this @ZZ?')
+        self.assertEqual(response.status_code, 400)
+        updated = next(item for item in self.tasks() if item['id'] == task['id'])
+        self.assertEqual(updated['comments'], [])
+        self.assertNotIn('ZZ', updated['participants'])
+
+    def test_mention_restores_task_removed_from_tagged_users_list(self):
+        task = self.create(participants=['AA'])
+        self.assertEqual(self.send(self.alice, f"/{task['id']}/membership", 'DELETE', version=1).status_code, 200)
+        self.assertNotIn(task['id'], [item['id'] for item in self.tasks()])
+        self.assertEqual(self.send(self.bob, f"/{task['id']}/comments", body='Bringing this back for @AA').status_code, 201)
+        restored = next(item for item in self.tasks() if item['id'] == task['id'])
+        self.assertIn('AA', restored['participants'])
+
     def test_cr_is_admin_and_can_delete_people(self):
         admin = self.app.test_client()
         self.assertEqual(self.send(admin, '/register', initials='CR', name='Chiranjiva Rao', password='a-long-password',
