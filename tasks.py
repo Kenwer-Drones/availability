@@ -524,20 +524,20 @@ def register_tasks(app, socketio, get_db, postgres=False):
         if source_side not in valid_sides or target_side not in valid_sides:
             abort(400, description='Choose valid connection sides.')
         if not isinstance(prerequisite_id, str) or not prerequisite_id or prerequisite_id == task_id:
-            abort(400, description='Choose a different task as the prerequisite.')
+            abort(400, description='Choose a different task for this task to depend on.')
         with database(write=True) as run:
             task = load_task(run, task_id, data)
             if task['completed']:
                 abort(409, description='Reopen the task before changing its dependencies.')
             if not run('SELECT id FROM tasks WHERE id=?', (prerequisite_id,)).fetchone():
-                abort(404, description='The prerequisite task no longer exists.')
+                abort(404, description='The task this depends on no longer exists.')
             # Prevent circular dependency chains.
             seen = {task_id}
             pending = [prerequisite_id]
             while pending:
                 current = pending.pop()
                 if current in seen:
-                    abort(409, description='That connection would create a circular task dependency.')
+                    abort(409, description='That connection would create a circular dependency.')
                 seen.add(current)
                 pending.extend(row['prerequisite_id'] for row in run(
                     'SELECT prerequisite_id FROM task_dependencies WHERE task_id=?', (current,)).fetchall())
@@ -575,7 +575,7 @@ def register_tasks(app, socketio, get_db, postgres=False):
             blocked = run('''SELECT t.title FROM task_dependencies d JOIN tasks t ON t.id=d.prerequisite_id
                             WHERE d.task_id=? AND t.completed=0''', (task_id,)).fetchall()
             if blocked and data['completed']:
-                abort(409, description='Complete the linked prerequisite task(s) first: ' + ', '.join(row['title'] for row in blocked))
+                abort(409, description='Complete the task(s) this depends on first: ' + ', '.join(row['title'] for row in blocked))
             if not membership:
                 abort(403, description='Only a visible participant can complete or reopen this task.')
             run('UPDATE tasks SET completed=?, completed_at=?, version=version+1 WHERE id=?',
