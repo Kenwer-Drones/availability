@@ -164,7 +164,7 @@ textarea { resize: vertical; }
 }
 
 .board { position: relative; }
-.dependency-layer { position: absolute; inset: 0; z-index: 0; pointer-events: auto; overflow: visible; }
+.dependency-layer { position: absolute; inset: 0; z-index: 2; pointer-events: none; overflow: visible; }
 .task-card, .column-heading, .add-column { position: relative; z-index: 1; pointer-events: auto; }
 .dependency-line { fill: none; stroke: #7d8793; stroke-width: 1.5; stroke-dasharray: 3 4; opacity: .72; pointer-events: none; }
 .dependency-line-preview { stroke: #3367d6; opacity: .95; }
@@ -207,3 +207,6 @@ body.cut-mode .dependency-line { pointer-events: stroke; cursor: url("data:image
 
 .dependency-line-hit { fill: none; stroke: transparent; stroke-width: 18; pointer-events: stroke; cursor: crosshair; }
 .dependency-line-hover { stroke: #c03932; stroke-width: 2.5; opacity: 1; }
+
+.dependency-layer .dependency-line,
+.dependency-layer .dependency-line-hit { pointer-events: stroke; }
