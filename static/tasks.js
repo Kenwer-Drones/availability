@@ -8,13 +8,11 @@ let deleting = null;
 let busy = false;
 let refreshSequence = 0;
 let draggedTaskId = null;
-const openCommentTasks = new Set();
 const icons = {
     edit: '<path d="m16 3 5 5-12 12-6 1 1-6Z M14 5l5 5"/>',
     trash: '<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/>',
     calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/>',
     check: '<path d="m5 12 4 4L19 6"/>',
-    comment: '<path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z"/>'
 };
 function icon(name) {
     return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name]}</svg>`;
@@ -276,12 +274,6 @@ function taskCard(task) {
     card.append(meta);
     const footer = element('div', 'task-footer');
     const actions = element('div', 'task-tools');
-    const comments = task.comments || [];
-    actions.append(tool('comment', comments.length ? `Comments (${comments.length})` : 'Add comment', () => {
-        if (openCommentTasks.has(task.id)) openCommentTasks.delete(task.id);
-        else openCommentTasks.add(task.id);
-        render();
-    }, !boardState.user));
     if (!task.completed) actions.append(tool('edit', 'Edit task', () => openTask(task), !boardState.user));
     if (boardState.user && [task.assignee, task.created_by].includes(boardState.user)) actions.append(tool('trash', 'Delete task for everyone', () => {
         deleting = task;
@@ -292,10 +284,6 @@ function taskCard(task) {
     else if (boardState.user && (task.participants || []).includes(boardState.user)) actions.append(tool('trash', 'Remove task from my list', () => removeFromMyList(task)));
     footer.append(actions);
     card.append(footer);
-    if (openCommentTasks.has(task.id)) {
-        card.classList.add('comments-open');
-        card.append(commentPanel(task));
-    }
     return card;
 }
 function commentPanel(task) {
@@ -401,6 +389,7 @@ function openTask(task = null, assignee = boardState.user) {
     $('task-assignee').disabled = !!task?.assignee && task.assignee !== boardState.user;
     $('assignee-note').hidden = !$('task-assignee').disabled;
     $('task-deadline').value = arizonaInput(task?.deadline);
+    $('task-comment').value = '';
     $('task-error').textContent = '';
     previewDeadline();
     $('task-dialog').showModal();
@@ -430,7 +419,9 @@ submitForm('task-form', 'task-error', async () => {
     await api(editing ? `/${editing.id}` : '', editing ? 'PATCH' : 'POST', {
         title: $('task-title').value, assignee: $('task-assignee').value || null,
         participants: Array.from(document.querySelectorAll('#task-participants input:checked')).map(el => el.value),
-        deadline: $('task-deadline').value || null, ...(editing ? { version: editing.version } : {})
+        deadline: $('task-deadline').value || null,
+        comment: $('task-comment').value.trim() || null,
+        ...(editing ? { version: editing.version } : {})
     });
     $('task-dialog').close();
     await refresh();
