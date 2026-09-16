@@ -41,6 +41,7 @@
             <p class="muted">Everyone added here will see this task. Completing it completes it for everyone.</p>
             <label>Deadline <span class="muted">(Arizona time)</span><input type="datetime-local" id="task-deadline" min="1900-01-01T00:00" max="9998-12-31T23:59"></label>
             <p id="deadline-preview" class="muted"></p>
+            <label>Comment <span class="muted">(optional)</span><textarea id="task-comment" maxlength="1000" rows="3" placeholder="Add a comment or tag someone with @initials"></textarea></label>
             <p class="form-error" id="task-error" role="alert"></p>
             <div class="dialog-actions"><button type="button" class="close-dialog">Cancel</button><button class="primary" id="task-submit">Add task</button></div>
         </form>
