@@ -211,3 +211,13 @@ body.cut-mode .dependency-line { pointer-events: stroke; cursor: url("data:image
 .dependency-layer .dependency-line,
 .dependency-layer .dependency-line-hit { pointer-events: stroke; }
 
+
+.checklist-toggle { border: 0; background: transparent; color: #667085; font-size: 11px; padding: 2px 0; margin: 7px 0 0 29px; cursor: pointer; }
+.checklist-panel { display: grid; gap: 6px; margin: 7px 0 0 29px; padding: 8px; border-top: 1px solid rgb(70 75 84 / 18%); background: rgb(255 255 255 / 42%); }
+.checklist-item { display: flex; align-items: flex-start; gap: 7px; font-size: 12px; }
+.checklist-item input { margin-top: 3px; }
+.checklist-done { text-decoration: line-through; color: #858a92; }
+.checklist-editor { display: grid; gap: 6px; margin-top: 5px; }
+.checklist-editor-item { display: flex; gap: 6px; align-items: center; }
+.checklist-editor-item input { flex: 1; margin-top: 0; }
+.checklist-editor-item .icon-button { flex: 0 0 28px; }
