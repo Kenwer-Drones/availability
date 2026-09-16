@@ -172,3 +172,12 @@ textarea { resize: vertical; }
 .task-card:hover .dependency-handle, .dependency-handle:focus-visible, body.drawing-dependency .dependency-handle { opacity: 1; }
 body.drawing-dependency, body.drawing-dependency * { cursor: crosshair !important; }
 .task-card.dependency-blocked { border-style: dashed; }
+
+.dependency-handles { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+.dependency-handle { pointer-events: auto; }
+.dependency-handle-top, .dependency-handle-bottom { left: 50%; transform: translateX(-50%); }
+.dependency-handle-top { top: -8px; }
+.dependency-handle-bottom { bottom: -8px; }
+.dependency-handle-left, .dependency-handle-right { top: 50%; transform: translateY(-50%); }
+.dependency-handle-left { left: -8px; }
+.dependency-handle-right { right: -8px; }
