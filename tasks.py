@@ -105,6 +105,12 @@ def register_tasks(app, socketio, get_db, postgres=False):
             run('''CREATE TABLE IF NOT EXISTS task_column_order (
                 owner TEXT PRIMARY KEY REFERENCES task_accounts(initials) ON DELETE CASCADE,
                 order_json TEXT NOT NULL)''')
+            run('''CREATE TABLE IF NOT EXISTS task_checklist (
+                id TEXT PRIMARY KEY,
+                task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+                label TEXT NOT NULL,
+                completed INTEGER NOT NULL DEFAULT 0,
+                position INTEGER NOT NULL DEFAULT 0)''')
             run('''CREATE TABLE IF NOT EXISTS task_comments (
                 id TEXT PRIMARY KEY,
                 task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
@@ -368,10 +374,12 @@ def register_tasks(app, socketio, get_db, postgres=False):
                 completed, deadline IS NULL, deadline, position, id''').fetchall()]
             participant_rows = run('SELECT task_id, initials, hidden FROM task_participants').fetchall()
             comment_rows = run('SELECT * FROM task_comments ORDER BY created_at, id').fetchall()
+            checklist_rows = run('SELECT * FROM task_checklist ORDER BY task_id, position, id').fetchall()
             dependency_rows = run('SELECT task_id, prerequisite_id, source_side, target_side FROM task_dependencies').fetchall()
         participants = {}
         comments = {}
         dependencies = {}
+        checklist = {}
         hidden = set()
         for row in participant_rows:
             if not row['hidden']:
@@ -382,6 +390,8 @@ def register_tasks(app, socketio, get_db, postgres=False):
             comments.setdefault(row['task_id'], []).append(dict(row))
         for row in dependency_rows:
             dependencies.setdefault(row['task_id'], []).append({'task_id': row['prerequisite_id'], 'source_side': row['source_side'], 'target_side': row['target_side']})
+        for row in checklist_rows:
+            checklist.setdefault(row['task_id'], []).append(dict(row))
         visible_rows = []
         for row in rows:
             if row['id'] in hidden:
@@ -389,6 +399,7 @@ def register_tasks(app, socketio, get_db, postgres=False):
             row['participants'] = participants.get(row['id'], [])
             row['comments'] = comments.get(row['id'], [])
             row['dependencies'] = dependencies.get(row['id'], [])
+            row['checklist'] = checklist.get(row['id'], [])
             visible_rows.append(row)
         with database() as run:
             order_row = run('SELECT order_json FROM task_column_order WHERE owner=?', (g.task_user,)).fetchone()
@@ -450,6 +461,17 @@ def register_tasks(app, socketio, get_db, postgres=False):
                    ON CONFLICT(task_id, initials) DO UPDATE SET hidden=0''',
             (task_id, initials))
 
+    def save_checklist(run, task_id, values):
+        if values is None:
+            return
+        if not isinstance(values, list) or any(not isinstance(item, str) for item in values):
+            abort(400, description='Checklist items must be text.')
+        run('DELETE FROM task_checklist WHERE task_id=?', (task_id,))
+        for position, label in enumerate(dict.fromkeys(item.strip() for item in values if item.strip())):
+            if len(label) > 300:
+                abort(400, description='Checklist items must be 300 characters or fewer.')
+            run('INSERT INTO task_checklist (id, task_id, label, position) VALUES (?, ?, ?, ?)', (secrets.token_hex(12), task_id, label, position))
+
     @bp.post('/api/tasks')
     @authenticated
     def create():
@@ -464,6 +486,7 @@ def register_tasks(app, socketio, get_db, postgres=False):
                 (task_id, title, assignee, g.task_user, deadline, next_position(run)))
             save_participants(run, task_id, participant_values(run, data.get('participants'), assignee))
             save_comment(run, task_id, data.get('comment'))
+            save_checklist(run, task_id, data.get('checklist'))
         return changed(), 201
 
     def load_task(run, task_id, data):
@@ -497,6 +520,21 @@ def register_tasks(app, socketio, get_db, postgres=False):
             elif assignee:
                 run('INSERT INTO task_participants (task_id, initials) VALUES (?, ?) ON CONFLICT(task_id, initials) DO NOTHING', (task_id, assignee))
             save_comment(run, task_id, data.get('comment'))
+            save_checklist(run, task_id, data.get('checklist'))
+        return changed()
+
+    @bp.patch('/api/tasks/<task_id>/checklist/<item_id>')
+    @authenticated
+    def toggle_checklist(task_id, item_id):
+        data = payload()
+        if type(data.get('completed')) is not bool:
+            abort(400, description='Completed must be true or false.')
+        with database(write=True) as run:
+            task = load_task(run, task_id, data)
+            if not run('SELECT id FROM task_checklist WHERE id=? AND task_id=?', (item_id, task_id)).fetchone():
+                abort(404, description='Checklist item not found.')
+            run('UPDATE task_checklist SET completed=? WHERE id=? AND task_id=?', (int(data['completed']), item_id, task_id))
+            run('UPDATE tasks SET version=version+1 WHERE id=?', (task_id,))
         return changed()
 
     @bp.post('/api/tasks/layout')
