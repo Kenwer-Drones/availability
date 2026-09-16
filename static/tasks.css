@@ -175,12 +175,22 @@ body.drawing-dependency, body.drawing-dependency * { cursor: crosshair !importan
 
 .dependency-handles { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
 .dependency-handle { pointer-events: auto; }
-.dependency-handle-top, .dependency-handle-bottom { left: 50%; transform: translateX(-50%); }
-.dependency-handle-top { top: -8px; }
-.dependency-handle-bottom { bottom: -8px; }
-.dependency-handle-left, .dependency-handle-right { top: 50%; transform: translateY(-50%); }
-.dependency-handle-left { left: -8px; }
-.dependency-handle-right { right: -8px; }
+/* Dependency joints sit outside the four corners of each task card. */
+.dependency-handle-top,
+.dependency-handle-right,
+.dependency-handle-bottom,
+.dependency-handle-left {
+    width: 12px;
+    height: 12px;
+    margin: 0;
+    padding: 0;
+    line-height: 10px;
+    transform: none;
+}
+.dependency-handle-top { top: -8px; left: -8px; }
+.dependency-handle-right { top: -8px; right: -8px; }
+.dependency-handle-bottom { right: -8px; bottom: -8px; }
+.dependency-handle-left { bottom: -8px; left: -8px; }
 
 .dependency-line { pointer-events: stroke; cursor: scissors; }
 .dependency-line:hover, .dependency-line:focus { stroke: #c03932; stroke-width: 2.5; opacity: 1; }
