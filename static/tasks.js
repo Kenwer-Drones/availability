@@ -8,6 +8,7 @@ let deleting = null;
 let busy = false;
 let refreshSequence = 0;
 let draggedTaskId = null;
+let dependencyDrag = null;
 const icons = {
     edit: '<path d="m16 3 5 5-12 12-6 1 1-6Z M14 5l5 5"/>',
     trash: '<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/>',
@@ -180,6 +181,7 @@ function render() {
         fragment.append(column);
     });
     $('board').replaceChildren(fragment);
+    requestAnimationFrame(drawDependencyLines);
     if (state.admin && location.hash === '#people' && !$('people-dialog').open) {
         history.replaceState(null, '', '/tasks');
         renderPeople();
@@ -202,6 +204,7 @@ function taskCard(task) {
         card.style.setProperty('--task-border', shadeHex(assigneeColor[2], age));
     }
     card.dataset.taskId = task.id;
+    card.append(dependencyHandle(task));
     card.draggable = !task.completed && !!boardState.user;
     if (card.draggable) {
         card.addEventListener('dragstart', event => {
@@ -286,6 +289,88 @@ function taskCard(task) {
     card.append(footer);
     return card;
 }
+function dependencyHandle(task) {
+    const handle = element('button', 'dependency-handle', '·');
+    handle.type = 'button';
+    handle.title = 'Drag to link this task to a prerequisite';
+    handle.setAttribute('aria-label', 'Link task dependency');
+    handle.addEventListener('pointerdown', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        dependencyDrag = { taskId: task.id, x: event.clientX, y: event.clientY };
+        handle.setPointerCapture?.(event.pointerId);
+        document.body.classList.add('drawing-dependency');
+        drawDependencyLines();
+    });
+    handle.addEventListener('pointermove', event => {
+        if (!dependencyDrag) return;
+        dependencyDrag.x = event.clientX;
+        dependencyDrag.y = event.clientY;
+        drawDependencyLines();
+    });
+    handle.addEventListener('pointerup', async event => {
+        if (!dependencyDrag) return;
+        const sourceId = dependencyDrag.taskId;
+        dependencyDrag = null;
+        document.body.classList.remove('drawing-dependency');
+        const target = document.elementFromPoint(event.clientX, event.clientY)?.closest('[data-task-id]');
+        if (!target || target.dataset.taskId === sourceId) { drawDependencyLines(); return; }
+        const source = boardState.tasks.find(item => item.id === sourceId);
+        try {
+            await api('/' + sourceId + '/dependencies', 'POST', { version: source.version, prerequisite_id: target.dataset.taskId });
+            await refresh();
+        } catch (error) { notice(error.message); drawDependencyLines(); }
+    });
+    return handle;
+}
+function drawDependencyLines() {
+    const board = $('board');
+    if (!board) return;
+    let svg = board.querySelector('.dependency-layer');
+    if (!svg) {
+        svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.classList.add('dependency-layer');
+        board.prepend(svg);
+    }
+    svg.replaceChildren();
+    const boardRect = board.getBoundingClientRect();
+    svg.setAttribute('width', board.scrollWidth);
+    svg.setAttribute('height', board.scrollHeight);
+    svg.setAttribute('viewBox', `0 0 ${board.scrollWidth} ${board.scrollHeight}`);
+    const taskMap = new Map(Array.from(board.querySelectorAll('[data-task-id]')).map(card => [card.dataset.taskId, card]));
+    boardState.tasks.forEach(task => (task.dependencies || []).forEach(prerequisiteId => {
+        const from = taskMap.get(task.id);
+        const to = taskMap.get(prerequisiteId);
+        if (!from || !to) return;
+        const a = from.getBoundingClientRect();
+        const b = to.getBoundingClientRect();
+        const x1 = a.left - boardRect.left + board.scrollLeft;
+        const y1 = a.top - boardRect.top + board.scrollTop + a.height / 2;
+        const x2 = b.left - boardRect.left + board.scrollLeft;
+        const y2 = b.top - boardRect.top + board.scrollTop + b.height / 2;
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        const bend = Math.max(18, Math.abs(x2 - x1) / 2);
+        line.setAttribute('d', `M ${x1} ${y1} C ${x1 + bend} ${y1}, ${x2 - bend} ${y2}, ${x2} ${y2}`);
+        line.classList.add('dependency-line');
+        svg.append(line);
+    }));
+    if (dependencyDrag) {
+        const from = taskMap.get(dependencyDrag.taskId);
+        if (from) {
+            const a = from.getBoundingClientRect();
+            const x1 = a.left - boardRect.left + board.scrollLeft;
+            const y1 = a.top - boardRect.top + board.scrollTop + a.height / 2;
+            const x2 = dependencyDrag.x - boardRect.left + board.scrollLeft;
+            const y2 = dependencyDrag.y - boardRect.top + board.scrollTop;
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            line.setAttribute('d', `M ${x1} ${y1} L ${x2} ${y2}`);
+            line.classList.add('dependency-line', 'dependency-line-preview');
+            svg.append(line);
+        }
+    }
+}
+window.addEventListener('resize', drawDependencyLines);
+
 function commentPanel(task) {
     const panel = element('section', 'comments-panel');
     panel.setAttribute('aria-label', `Comments for ${task.title}`);
