@@ -164,8 +164,8 @@ textarea { resize: vertical; }
 }
 
 .board { position: relative; }
-.dependency-layer { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: visible; }
-.task-card, .column-heading, .add-column { position: relative; z-index: 1; }
+.dependency-layer { position: absolute; inset: 0; z-index: 0; pointer-events: auto; overflow: visible; }
+.task-card, .column-heading, .add-column { position: relative; z-index: 1; pointer-events: auto; }
 .dependency-line { fill: none; stroke: #7d8793; stroke-width: 1.5; stroke-dasharray: 3 4; opacity: .72; pointer-events: none; }
 .dependency-line-preview { stroke: #3367d6; opacity: .95; }
 .dependency-handle { position: absolute; left: -7px; top: 50%; z-index: 2; width: 12px; height: 20px; padding: 0; border: 0; background: transparent; color: #9aa1aa; font-size: 19px; line-height: 14px; opacity: 0; cursor: crosshair; transform: translateY(-50%); }
@@ -187,12 +187,13 @@ body.drawing-dependency, body.drawing-dependency * { cursor: crosshair !importan
     line-height: 10px;
     transform: none;
 }
-.dependency-handle-top { top: -8px; left: -8px; }
-.dependency-handle-right { top: -8px; right: -8px; }
-.dependency-handle-bottom { right: -8px; bottom: -8px; }
-.dependency-handle-left { bottom: -8px; left: -8px; }
+/* Keep each joint centered on the outside middle of its border. */
+.dependency-handle-top { top: -8px; left: 50%; transform: translateX(-50%); }
+.dependency-handle-right { top: 50%; right: -8px; transform: translateY(-50%); }
+.dependency-handle-bottom { right: auto; bottom: -8px; left: 50%; transform: translateX(-50%); }
+.dependency-handle-left { top: 50%; bottom: auto; left: -8px; transform: translateY(-50%); }
 
-.dependency-line { pointer-events: stroke; cursor: scissors; }
+.dependency-line { pointer-events: stroke; cursor: crosshair; }
 .dependency-line:hover, .dependency-line:focus { stroke: #c03932; stroke-width: 2.5; opacity: 1; }
 .column-heading[draggable="true"] { cursor: grab; }
 .column-heading.column-dragging { opacity: .45; }
@@ -204,5 +205,5 @@ body.drawing-dependency, body.drawing-dependency * { cursor: crosshair !importan
 body.cut-mode, body.cut-mode * { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Ctext y='19' font-size='18'%3E✂%3C/text%3E%3C/svg%3E") 4 4, crosshair !important; }
 body.cut-mode .dependency-line { pointer-events: stroke; cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Ctext y='19' font-size='18'%3E✂%3C/text%3E%3C/svg%3E") 4 4, crosshair; }
 
-.dependency-line-hit { fill: none; stroke: transparent; stroke-width: 14; pointer-events: stroke; cursor: scissors; }
+.dependency-line-hit { fill: none; stroke: transparent; stroke-width: 18; pointer-events: stroke; cursor: crosshair; }
 .dependency-line-hover { stroke: #c03932; stroke-width: 2.5; opacity: 1; }
