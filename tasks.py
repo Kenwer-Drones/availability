@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 import hashlib
+import json
 import re
 import secrets
 import threading
@@ -101,6 +102,9 @@ def register_tasks(app, socketio, get_db, postgres=False):
                     run("ALTER TABLE task_dependencies ADD COLUMN source_side TEXT NOT NULL DEFAULT 'right'")
                 if 'target_side' not in dependency_columns:
                     run("ALTER TABLE task_dependencies ADD COLUMN target_side TEXT NOT NULL DEFAULT 'left'")
+            run('''CREATE TABLE IF NOT EXISTS task_column_order (
+                owner TEXT PRIMARY KEY REFERENCES task_accounts(initials) ON DELETE CASCADE,
+                order_json TEXT NOT NULL)''')
             run('''CREATE TABLE IF NOT EXISTS task_comments (
                 id TEXT PRIMARY KEY,
                 task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
@@ -386,8 +390,11 @@ def register_tasks(app, socketio, get_db, postgres=False):
             row['comments'] = comments.get(row['id'], [])
             row['dependencies'] = dependencies.get(row['id'], [])
             visible_rows.append(row)
+        with database() as run:
+            order_row = run('SELECT order_json FROM task_column_order WHERE owner=?', (g.task_user,)).fetchone()
+        column_order = json.loads(order_row['order_json']) if order_row else []
         return jsonify(tasks=visible_rows, users=directory(), user=g.task_user,
-                       admin=g.task_user == admin_initials)
+                       admin=g.task_user == admin_initials, column_order=column_order)
 
     def participant_values(run, values, assignee):
         if values is None:
@@ -491,6 +498,20 @@ def register_tasks(app, socketio, get_db, postgres=False):
                 run('INSERT INTO task_participants (task_id, initials) VALUES (?, ?) ON CONFLICT(task_id, initials) DO NOTHING', (task_id, assignee))
             save_comment(run, task_id, data.get('comment'))
         return changed()
+
+    @bp.post('/api/tasks/layout')
+    @authenticated
+    def save_layout():
+        data = payload()
+        order = data.get('order')
+        users = set(directory())
+        if not isinstance(order, list) or any(value not in users for value in order) or len(set(order)) != len(order):
+            abort(400, description='Invalid task column order.')
+        with database(write=True) as run:
+            run('''INSERT INTO task_column_order (owner, order_json) VALUES (?, ?)
+                   ON CONFLICT(owner) DO UPDATE SET order_json=excluded.order_json''',
+                (g.task_user, json.dumps(order)))
+        return jsonify(status='ok')
 
     @bp.post('/api/tasks/<task_id>/dependencies')
     @authenticated
