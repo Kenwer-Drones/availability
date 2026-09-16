@@ -314,13 +314,16 @@ function dependencyHandle(task) {
         handle.addEventListener('pointerup', async event => {
             if (!dependencyDrag) return;
             const sourceId = dependencyDrag.taskId;
+            const sourceSide = dependencyDrag.side;
             dependencyDrag = null;
             document.body.classList.remove('drawing-dependency');
             const target = document.elementFromPoint(event.clientX, event.clientY)?.closest('[data-task-id]');
             if (!target || target.dataset.taskId === sourceId) { drawDependencyLines(); return; }
             const source = boardState.tasks.find(item => item.id === sourceId);
             try {
-                await api('/' + sourceId + '/dependencies', 'POST', { version: source.version, prerequisite_id: target.dataset.taskId });
+                const targetRect = target.getBoundingClientRect();
+                const targetSide = nearestSide(targetRect, event.clientX, event.clientY);
+                await api('/' + sourceId + '/dependencies', 'POST', { version: source.version, prerequisite_id: target.dataset.taskId, source_side: sourceSide, target_side: targetSide });
                 await refresh();
             } catch (error) { notice(error.message); drawDependencyLines(); }
         });
@@ -360,14 +363,15 @@ function drawDependencyLines() {
     svg.setAttribute('height', board.scrollHeight);
     svg.setAttribute('viewBox', `0 0 ${board.scrollWidth} ${board.scrollHeight}`);
     const taskMap = new Map(Array.from(board.querySelectorAll('[data-task-id]')).map(card => [card.dataset.taskId, card]));
-    boardState.tasks.forEach(task => (task.dependencies || []).forEach(prerequisiteId => {
+    boardState.tasks.forEach(task => (task.dependencies || []).forEach(dependency => {
+        const prerequisiteId = typeof dependency === 'string' ? dependency : dependency.task_id;
         const from = taskMap.get(task.id);
         const to = taskMap.get(prerequisiteId);
         if (!from || !to) return;
         const a = from.getBoundingClientRect();
         const b = to.getBoundingClientRect();
-        const start = sidePoint(a, task.dependency_side || 'right', boardRect, board.scrollLeft, board.scrollTop);
-        const targetSide = task.dependency_target_side || nearestSide(b, b.left, b.top);
+        const start = sidePoint(a, typeof dependency === 'string' ? 'right' : dependency.source_side || 'right', boardRect, board.scrollLeft, board.scrollTop);
+        const targetSide = typeof dependency === 'string' ? 'left' : dependency.target_side || 'left';
         const end = sidePoint(b, targetSide, boardRect, board.scrollLeft, board.scrollTop);
         const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         const bend = Math.max(18, Math.abs(end.x - start.x) / 2);
