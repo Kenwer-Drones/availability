@@ -10,6 +10,7 @@ let refreshSequence = 0;
 let draggedTaskId = null;
 let dependencyDrag = null;
 let cutMode = false;
+const openChecklistTasks = new Set();
 const icons = {
     edit: '<path d="m16 3 5 5-12 12-6 1 1-6Z M14 5l5 5"/>',
     trash: '<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/>',
@@ -286,6 +287,13 @@ function taskCard(task) {
     const otherParticipants = (task.participants || []).filter(initials => initials !== task.assignee).map(initials => boardState.users[initials]?.name || initials);
     if (otherParticipants.length) meta.append(element('div', 'shared-with', `Also assigned to: ${otherParticipants.join(', ')}`));
     card.append(meta);
+    if ((task.checklist || []).length) {
+        const checklistButton = element('button', 'checklist-toggle', `☷ ${task.checklist.filter(item => item.completed).length}/${task.checklist.length}`);
+        checklistButton.type = 'button'; checklistButton.setAttribute('aria-expanded', String(openChecklistTasks.has(task.id)));
+        checklistButton.onclick = event => { event.stopPropagation(); if (openChecklistTasks.has(task.id)) openChecklistTasks.delete(task.id); else openChecklistTasks.add(task.id); render(); };
+        card.append(checklistButton);
+        if (openChecklistTasks.has(task.id)) card.append(checklistPanel(task));
+    }
     const footer = element('div', 'task-footer');
     const actions = element('div', 'task-tools');
     if (!task.completed) actions.append(tool('edit', 'Edit task', () => openTask(task), !boardState.user));
@@ -299,6 +307,17 @@ function taskCard(task) {
     footer.append(actions);
     card.append(footer);
     return card;
+}
+function checklistPanel(task) {
+    const panel = element('div', 'checklist-panel');
+    panel.setAttribute('aria-label', 'Checklist');
+    (task.checklist || []).forEach(item => {
+        const label = element('label', 'checklist-item');
+        const checkbox = element('input'); checkbox.type = 'checkbox'; checkbox.checked = !!item.completed; checkbox.disabled = busy;
+        checkbox.onchange = () => mutate(`/${task.id}/checklist/${item.id}`, 'PATCH', { version: task.version, completed: checkbox.checked });
+        label.append(checkbox, element('span', item.completed ? 'checklist-done' : '', item.label)); panel.append(label);
+    });
+    return panel;
 }
 function dependencyHandle(task) {
     const group = element('span', 'dependency-handles');
@@ -527,6 +546,8 @@ function openTask(task = null, assignee = boardState.user) {
     $('assignee-note').hidden = !$('task-assignee').disabled;
     $('task-deadline').value = arizonaInput(task?.deadline);
     $('task-comment').value = '';
+    const checklist = $('task-checklist-items'); checklist.replaceChildren();
+    (task?.checklist || []).forEach(item => addChecklistEditorItem(item.label));
     $('task-error').textContent = '';
     previewDeadline();
     $('task-dialog').showModal();
@@ -558,6 +579,7 @@ submitForm('task-form', 'task-error', async () => {
         participants: Array.from(document.querySelectorAll('#task-participants input:checked')).map(el => el.value),
         deadline: $('task-deadline').value || null,
         comment: $('task-comment').value.trim() || null,
+        checklist: Array.from(document.querySelectorAll('#task-checklist-items input')).map(input => input.value.trim()).filter(Boolean),
         ...(editing ? { version: editing.version } : {})
     });
     $('task-dialog').close();
@@ -604,6 +626,8 @@ $('search').oninput = render;
 $('show-completed').onchange = render;
 $('task-deadline').oninput = previewDeadline;
 $('retry').onclick = () => { notice(); refresh(); };
+$('add-checklist-item').onclick = () => addChecklistEditorItem('');
+function addChecklistEditorItem(value) { const row = element('div', 'checklist-editor-item'); const input = element('input'); input.type = 'text'; input.maxLength = 300; input.placeholder = 'Checklist item'; input.value = value; const remove = element('button', 'icon-button', '×'); remove.type = 'button'; remove.onclick = () => row.remove(); row.append(input, remove); $('task-checklist-items').append(row); input.focus(); }
 document.querySelectorAll('.close-dialog').forEach(button => button.onclick = () => button.closest('dialog').close());
 if (typeof io === 'function') {
     const socket = io();
