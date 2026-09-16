@@ -553,6 +553,11 @@ def register_tasks(app, socketio, get_db, postgres=False):
     def remove_dependency(task_id, prerequisite_id):
         with database(write=True) as run:
             task = load_task(run, task_id, {'version': request.get_json(silent=True).get('version') if isinstance(request.get_json(silent=True), dict) else None})
+            associated = run('''SELECT 1 FROM task_participants
+                                WHERE initials=? AND hidden=0 AND task_id IN (?, ?)
+                                LIMIT 1''', (g.task_user, task_id, prerequisite_id)).fetchone()
+            if not associated:
+                abort(403, description='Only people associated with these linked tasks can cut this connection.')
             run('DELETE FROM task_dependencies WHERE task_id=? AND prerequisite_id=?', (task_id, prerequisite_id))
             run('UPDATE tasks SET version=version+1 WHERE id=?', (task_id,))
         return changed()
