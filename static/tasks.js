@@ -390,14 +390,22 @@ function drawDependencyLines() {
         line.classList.add('dependency-line');
         line.setAttribute('tabindex', '0');
         line.setAttribute('aria-label', 'Cut task dependency');
-        line.title = 'Click to cut this connection';
-        line.addEventListener('click', async () => {
-            if (!cutMode) { notice('Click the scissors button first to cut a connection.'); return; }
+        line.title = 'Click this dotted connection to cut it';
+        const cutConnection = async () => {
             if (!confirm('Cut this task connection? The main task will no longer wait for the subtask.')) return;
             try { await api('/' + task.id + '/dependencies/' + prerequisiteId, 'DELETE', { version: task.version }); cutMode = false; document.body.classList.remove('cut-mode'); $('cut-dependency').setAttribute('aria-pressed', 'false'); await refresh(); }
             catch (error) { notice(error.message); }
-        });
-        svg.append(line);
+        };
+        line.addEventListener('click', cutConnection);
+        line.addEventListener('mouseenter', () => { line.classList.add('dependency-line-hover'); notice('Click the dotted line to cut this connection.'); });
+        line.addEventListener('mouseleave', () => line.classList.remove('dependency-line-hover'));
+        const hit = line.cloneNode();
+        hit.classList.remove('dependency-line');
+        hit.classList.add('dependency-line-hit');
+        hit.removeAttribute('tabindex');
+        hit.setAttribute('aria-hidden', 'true');
+        hit.addEventListener('click', cutConnection);
+        svg.append(hit, line);
     }));
     if (dependencyDrag) {
         const from = taskMap.get(dependencyDrag.taskId);
