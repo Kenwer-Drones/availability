@@ -211,5 +211,3 @@ body.cut-mode .dependency-line { pointer-events: stroke; cursor: url("data:image
 .dependency-layer .dependency-line,
 .dependency-layer .dependency-line-hit { pointer-events: stroke; }
 
-/* Temporary: hide dependency attachment dots without removing saved links. */
-.dependency-handles { display: none !important; }
