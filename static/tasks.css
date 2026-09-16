@@ -189,8 +189,8 @@ body.drawing-dependency, body.drawing-dependency * { cursor: crosshair !importan
 }
 /* Keep each joint centered on the outside middle of its border. */
 .dependency-handle-top { top: -8px; left: 50%; transform: translateX(-50%); }
-.dependency-handle-right { top: 50%; right: -8px; transform: translateY(-50%); }
-.dependency-handle-bottom { right: auto; bottom: -8px; left: 50%; transform: translateX(-50%); }
+.dependency-handle-right { top: 50%; right: -8px; left: auto; transform: translateY(-50%); }
+.dependency-handle-bottom { top: auto; right: auto; bottom: -8px; left: 50%; transform: translateX(-50%); }
 .dependency-handle-left { top: 50%; bottom: auto; left: -8px; transform: translateY(-50%); }
 
 .dependency-line { pointer-events: stroke; cursor: crosshair; }
