@@ -306,8 +306,8 @@ function dependencyHandle(task) {
         const handle = element('button', `dependency-handle dependency-handle-${side}`, '·');
         handle.type = 'button';
         handle.dataset.side = side;
-        handle.title = `Drag from the ${side} side to link a prerequisite`;
-        handle.setAttribute('aria-label', `Link task dependency from ${side} side`);
+        handle.title = `Drag from the ${side} side to connect a task this task depends on`;
+        handle.setAttribute('aria-label', `Connect a task this task depends on from the ${side} side`);
         handle.addEventListener('pointerdown', event => {
             event.preventDefault();
             event.stopPropagation();
@@ -392,7 +392,7 @@ function drawDependencyLines() {
         line.setAttribute('aria-label', 'Cut task dependency');
         line.title = 'Click this dotted connection to cut it';
         const cutConnection = async () => {
-            if (!confirm('Cut this task connection? The main task will no longer wait for the subtask.')) return;
+            if (!confirm('Remove this dependency? This task will no longer wait for the task it depends on.')) return;
             try { await api('/' + task.id + '/dependencies/' + prerequisiteId, 'DELETE', { version: task.version }); cutMode = false; document.body.classList.remove('cut-mode'); $('cut-dependency').setAttribute('aria-pressed', 'false'); await refresh(); }
             catch (error) { notice(error.message); }
         };
