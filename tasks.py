@@ -520,9 +520,9 @@ def register_tasks(app, socketio, get_db, postgres=False):
                 seen.add(current)
                 pending.extend(row['prerequisite_id'] for row in run(
                     'SELECT prerequisite_id FROM task_dependencies WHERE task_id=?', (current,)).fetchall())
-            run('''INSERT INTO task_dependencies (task_id, prerequisite_id, created_by)
-                   VALUES (?, ?, ?)
-                   ON CONFLICT(task_id, prerequisite_id) DO NOTHING''',
+            run('''INSERT INTO task_dependencies (task_id, prerequisite_id, created_by, source_side, target_side)
+                   VALUES (?, ?, ?, ?, ?)
+                   ON CONFLICT(task_id, prerequisite_id) DO UPDATE SET source_side=excluded.source_side, target_side=excluded.target_side''',
                 (task_id, prerequisite_id, g.task_user, source_side, target_side))
             run('UPDATE tasks SET version=version+1 WHERE id=?', (task_id,))
         return changed(), 201
