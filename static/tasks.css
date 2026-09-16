@@ -162,3 +162,13 @@ textarea { resize: vertical; }
     width: auto;
     margin: 0;
 }
+
+.board { position: relative; }
+.dependency-layer { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: visible; }
+.task-card, .column-heading, .add-column { position: relative; z-index: 1; }
+.dependency-line { fill: none; stroke: #7d8793; stroke-width: 1.5; stroke-dasharray: 3 4; opacity: .72; pointer-events: none; }
+.dependency-line-preview { stroke: #3367d6; opacity: .95; }
+.dependency-handle { position: absolute; left: -7px; top: 50%; z-index: 2; width: 12px; height: 20px; padding: 0; border: 0; background: transparent; color: #9aa1aa; font-size: 19px; line-height: 14px; opacity: 0; cursor: crosshair; transform: translateY(-50%); }
+.task-card:hover .dependency-handle, .dependency-handle:focus-visible, body.drawing-dependency .dependency-handle { opacity: 1; }
+body.drawing-dependency, body.drawing-dependency * { cursor: crosshair !important; }
+.task-card.dependency-blocked { border-style: dashed; }
