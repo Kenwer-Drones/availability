@@ -306,6 +306,12 @@ function taskCard(task) {
     else if (boardState.user && (task.participants || []).includes(boardState.user)) actions.append(tool('trash', 'Remove task from my list', () => removeFromMyList(task)));
     footer.append(actions);
     card.append(footer);
+    // The comment icon was intentionally removed, so saved comments must be
+    // rendered directly on the task card instead of living behind a toggle.
+    if ((task.comments || []).length) {
+        card.classList.add('comments-open');
+        card.append(commentPanel(task));
+    }
     return card;
 }
 function checklistPanel(task) {
