@@ -94,6 +94,8 @@ h2 { font-size: 19px; margin: 0; }
 .mention-hint { color: #747982; font-size: 10px; overflow-wrap: anywhere; }
 .comment-form .form-error { grid-column: 1 / -1; margin: 0; }
 .comment-submit { padding: 5px 9px; font-size: 11px; align-self: start; }
+.existing-comments { margin-top: 16px; padding: 10px; border: 1px solid #d9dce1; border-radius: 7px; background: #f8fafc; }
+.existing-comments h3 { margin: 0 0 8px; font-size: 13px; }
 .drag-hint { color: #747982; font-size: 12px; }
 .icon-button { padding: 4px; min-width: 28px; height: 28px; border-color: transparent; color: #7a8089; display: inline-flex; align-items: center; justify-content: center; }
 .icon-button svg { width: 15px; height: 15px; }

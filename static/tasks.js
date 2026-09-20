@@ -567,6 +567,18 @@ function openTask(task = null, assignee = boardState.user) {
     $('assignee-note').hidden = !$('task-assignee').disabled;
     $('task-deadline').value = arizonaInput(task?.deadline);
     $('task-comment').value = '';
+    const savedComments = task?.comments || [];
+    const existingComments = $('task-existing-comments');
+    const existingCommentsList = $('task-existing-comments-list');
+    existingCommentsList.replaceChildren();
+    savedComments.forEach(comment => {
+        const item = element('div', 'comment-item');
+        const author = boardState.users[comment.author]?.name || comment.author;
+        item.append(element('div', 'comment-meta', `${author} (${comment.author}) · ${commentTime(comment.created_at)}`));
+        item.append(commentBody(comment.body));
+        existingCommentsList.append(item);
+    });
+    existingComments.hidden = !savedComments.length;
     const checklist = $('task-checklist-items'); checklist.replaceChildren();
     (task?.checklist || []).forEach(item => addChecklistEditorItem(item.label));
     $('task-error').textContent = '';
@@ -589,22 +601,24 @@ function submitForm(formId, errorId, action) {
         if (submit.disabled) return;
         submit.disabled = true;
         $(errorId).textContent = '';
-        try { await action(); notice(); }
+        try { notice((await action()) || ''); }
         catch (error) { $(errorId).textContent = error.message; await refresh(); }
         finally { submit.disabled = false; }
     });
 }
 submitForm('task-form', 'task-error', async () => {
+    const comment = $('task-comment').value.trim() || null;
     await api(editing ? `/${editing.id}` : '', editing ? 'PATCH' : 'POST', {
         title: $('task-title').value, assignee: $('task-assignee').value || null,
         participants: Array.from(document.querySelectorAll('#task-participants input:checked')).map(el => el.value),
         deadline: $('task-deadline').value || null,
-        comment: $('task-comment').value.trim() || null,
+        comment,
         checklist: Array.from(document.querySelectorAll('#task-checklist-items input')).map(input => input.value.trim()).filter(Boolean),
         ...(editing ? { version: editing.version } : {})
     });
     $('task-dialog').close();
     await refresh();
+    return comment ? 'Comment saved and displayed on the task.' : '';
 });
 submitForm('delete-form', 'delete-error', async () => {
     await api(`/${deleting.id}`, 'DELETE', { version: deleting.version });

@@ -268,6 +268,16 @@ class TaskBoardTests(unittest.TestCase):
         self.assertEqual(updated['comments'][0]['body'], 'Please review this @aa and @CR.')
         self.assertIsNotNone(updated['comments'][0]['created_at'])
 
+    def test_comment_saved_from_edit_form_is_returned_after_reload(self):
+        task = self.create(participants=['AA'])
+        response = self.send(self.alice, f"/{task['id']}", 'PATCH', version=task['version'],
+                             title=task['title'], assignee='BB', deadline='2026-09-15T08:00',
+                             participants=['AA', 'BB'], comment='Saved from Edit task')
+        self.assertEqual(response.status_code, 200, response.json)
+        updated = next(item for item in self.tasks() if item['id'] == task['id'])
+        self.assertEqual([comment['body'] for comment in updated['comments']], ['Saved from Edit task'])
+        self.assertEqual(updated['comments'][0]['author'], 'AA')
+
     def test_comment_rejects_unknown_mentions_without_saving(self):
         task = self.create()
         response = self.send(self.alice, f"/{task['id']}/comments", body='Can you check this @ZZ?')
