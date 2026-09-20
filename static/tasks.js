@@ -11,6 +11,7 @@ let draggedTaskId = null;
 let dependencyDrag = null;
 let cutMode = false;
 const openChecklistTasks = new Set();
+const openCommentTasks = new Set();
 const icons = {
     edit: '<path d="m16 3 5 5-12 12-6 1 1-6Z M14 5l5 5"/>',
     trash: '<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/>',
@@ -306,11 +307,25 @@ function taskCard(task) {
     else if (boardState.user && (task.participants || []).includes(boardState.user)) actions.append(tool('trash', 'Remove task from my list', () => removeFromMyList(task)));
     footer.append(actions);
     card.append(footer);
-    // The comment icon was intentionally removed, so saved comments must be
-    // rendered directly on the task card instead of living behind a toggle.
-    if ((task.comments || []).length) {
+    // Keep saved comments visible. For a task without comments, expose a clear
+    // action so its first comment can be added directly from the card.
+    if ((task.comments || []).length || openCommentTasks.has(task.id)) {
         card.classList.add('comments-open');
         card.append(commentPanel(task));
+    } else if (boardState.user) {
+        const addComment = element('button', 'comment-toggle', '+ Add comment');
+        addComment.type = 'button';
+        addComment.setAttribute('aria-label', 'Add comment');
+        addComment.onclick = event => {
+            event.stopPropagation();
+            openCommentTasks.add(task.id);
+            render();
+            requestAnimationFrame(() => {
+                const currentCard = document.querySelector(`[data-task-id="${CSS.escape(task.id)}"]`);
+                currentCard?.querySelector('.comment-input')?.focus();
+            });
+        };
+        card.append(addComment);
     }
     return card;
 }
