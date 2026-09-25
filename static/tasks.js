@@ -11,7 +11,6 @@ let draggedTaskId = null;
 let dependencyDrag = null;
 let cutMode = false;
 const openChecklistTasks = new Set();
-const openCommentTasks = new Set();
 const icons = {
     edit: '<path d="m16 3 5 5-12 12-6 1 1-6Z M14 5l5 5"/>',
     trash: '<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/>',
@@ -307,26 +306,6 @@ function taskCard(task) {
     else if (boardState.user && (task.participants || []).includes(boardState.user)) actions.append(tool('trash', 'Remove task from my list', () => removeFromMyList(task)));
     footer.append(actions);
     card.append(footer);
-    // Keep saved comments visible. For a task without comments, expose a clear
-    // action so its first comment can be added directly from the card.
-    if ((task.comments || []).length || openCommentTasks.has(task.id)) {
-        card.classList.add('comments-open');
-        card.append(commentPanel(task));
-    } else if (boardState.user) {
-        const addComment = element('button', 'comment-toggle', '+ Add comment');
-        addComment.type = 'button';
-        addComment.setAttribute('aria-label', 'Add comment');
-        addComment.onclick = event => {
-            event.stopPropagation();
-            openCommentTasks.add(task.id);
-            render();
-            requestAnimationFrame(() => {
-                const currentCard = document.querySelector(`[data-task-id="${CSS.escape(task.id)}"]`);
-                currentCard?.querySelector('.comment-input')?.focus();
-            });
-        };
-        card.append(addComment);
-    }
     return card;
 }
 function checklistPanel(task) {
@@ -463,55 +442,6 @@ function drawDependencyLines() {
 }
 window.addEventListener('resize', drawDependencyLines);
 
-function commentPanel(task) {
-    const panel = element('section', 'comments-panel');
-    panel.setAttribute('aria-label', `Comments for ${task.title}`);
-    panel.draggable = false;
-    panel.addEventListener('dragstart', event => event.preventDefault());
-    const list = element('div', 'comments-list');
-    (task.comments || []).forEach(comment => {
-        const item = element('div', 'comment-item');
-        const author = boardState.users[comment.author]?.name || comment.author;
-        item.append(element('div', 'comment-meta', `${author} (${comment.author}) · ${commentTime(comment.created_at)}`));
-        item.append(commentBody(comment.body));
-        list.append(item);
-    });
-    if (!(task.comments || []).length) list.append(element('p', 'empty-comment', 'No comments yet.'));
-    panel.append(list);
-    const form = element('form', 'comment-form');
-    const input = element('textarea', 'comment-input');
-    input.required = true;
-    input.maxLength = 1000;
-    input.rows = 2;
-    input.placeholder = 'Write a comment. Tag someone with @CR';
-    input.setAttribute('aria-label', 'Write a comment');
-    const hint = element('div', 'mention-hint', `Tag: ${Object.keys(boardState.users).sort().map(value => '@' + value).join('  ')}`);
-    const error = element('p', 'form-error');
-    const submit = element('button', 'comment-submit', 'Comment');
-    submit.type = 'submit';
-    form.append(input, hint, error, submit);
-    form.addEventListener('submit', async event => {
-        event.preventDefault();
-        if (busy || !input.value.trim()) return;
-        busy = true;
-        submit.disabled = true;
-        error.textContent = '';
-        let saved = false;
-        try {
-            await api(`/${task.id}/comments`, 'POST', { body: input.value });
-            input.value = '';
-            saved = true;
-        } catch (requestError) {
-            error.textContent = requestError.message;
-        } finally {
-            busy = false;
-            submit.disabled = false;
-        }
-        if (saved) await refresh();
-    });
-    panel.append(form);
-    return panel;
-}
 function commentBody(body) {
     const paragraph = element('p', 'comment-body');
     const mentionPattern = /(^|[^A-Za-z0-9_])@([A-Za-z]{2,3})(?![A-Za-z0-9_])/g;
