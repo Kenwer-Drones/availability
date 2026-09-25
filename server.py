@@ -142,6 +142,10 @@ from tasks import register_tasks
 
 get_user_directory, save_user_profile, get_authenticated_user = register_tasks(app, socketio, get_db, bool(DATABASE_URL))
 
+if DATABASE_URL:
+    from restore_snapshot import restore_if_requested
+    restore_if_requested(get_db)
+
 
 @app.route('/')
 def index():
